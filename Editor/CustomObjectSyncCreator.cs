@@ -223,6 +223,8 @@ namespace VRLabs.CustomObjectSyncCreator
 				parameters.Add(GenerateBoolParameter($"CustomObjectSync/ReadObject/{o}"));
 				parameters.Add(GenerateBoolParameter($"CustomObjectSync/StartWrite/{o}"));
 				parameters.Add(GenerateBoolParameter($"CustomObjectSync/StartRead/{o}"));
+				parameters.Add(GenerateBoolParameter($"CustomObjectSync/ReadInProgress/{o}"));
+				parameters.Add(GenerateBoolParameter($"CustomObjectSync/WriteInProgress/{o}"));
 				for (int p = 0; p < axis.Length; p++)
 				{
 					parameters.Add(GenerateFloatParameter($"CustomObjectSync/Temp/Position{axis[p]}/{o}"));
@@ -295,7 +297,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				.Concat(axis.SelectMany(n =>
 					Enumerable.Range(0, rotationBits).Select(i => $"CustomObjectSync/Bits/Rotation{n}{i}/{o}"))).ToArray()).ToArray();
 
-			int stepToStartSync = Mathf.CeilToInt(Math.Max(positionBits, rotationBits) / 12f);
+			int stepToStartSync = Mathf.CeilToInt(Math.Max(positionBits, rotationBits)*1.5f / 12f);
 			bool shouldDelayFirst = (stepToStartSync > syncSteps);
 
 			if (shouldDelayFirst)
@@ -420,8 +422,11 @@ namespace VRLabs.CustomObjectSyncCreator
 			for (int i = 0; i < objectParameterCount; i++)
 			{
 				syncParameters.Add(GenerateBoolParameter( $"CustomObjectSync/Sync/Object{i}", false));
-				syncParameters.Add(GenerateBoolParameter( $"CustomObjectSync/Temp/Object{i}", false));
 				syncParameters.Add(GenerateBoolParameter( $"CustomObjectSync/Object{i}", false));
+				for (int o = 0; o < objectCount; o++)
+				{
+					syncParameters.Add(GenerateBoolParameter( $"CustomObjectSync/Temp/Object{o}-{i}", false));
+				}
 			}
 			mergedController.parameters = mergedController.parameters.Concat(syncParameters).ToArray();
 			#endregion
@@ -488,8 +493,6 @@ namespace VRLabs.CustomObjectSyncCreator
 				sendConstraint.SetSource(1, source1);
 			}
 
-
-
 			Transform mainTargetObject = syncSystem.transform.Find("Target");
 			ParentConstraint mainTargetParentConstraint = mainTargetObject.gameObject.AddComponent<ParentConstraint>();
 			mainTargetParentConstraint.locked = true;
@@ -509,6 +512,25 @@ namespace VRLabs.CustomObjectSyncCreator
 
 				string oldPath = AnimationUtility.CalculateTransformPath(targetSyncObject.transform, descriptor.transform);
 				targetSyncObject.transform.parent = syncSystem.transform;
+
+				GameObject damping = null;
+				if (addDampeningConstraint)
+				{
+					damping = new GameObject($"{targetSyncObject.name} Damping Sync");
+					damping.transform.parent = syncSystem.transform;
+					ParentConstraint targetConstraint = targetSyncObject.AddComponent<ParentConstraint>();
+					targetConstraint.locked = true;
+					targetConstraint.constraintActive = true;
+					targetConstraint.AddSource(new ConstraintSource()
+					{
+						sourceTransform = damping.transform, weight = dampingConstraintValue
+					});
+					targetConstraint.AddSource(new ConstraintSource()
+					{
+						sourceTransform = targetSyncObject.transform, weight = 1f
+					});
+				}
+				
 				string newPath = AnimationUtility.CalculateTransformPath(targetSyncObject.transform, descriptor.transform);
 			
 				AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
@@ -516,24 +538,17 @@ namespace VRLabs.CustomObjectSyncCreator
 					.ToArray();
 				RenameClipPaths(allClips, false, oldPath, newPath);
 
-				ParentConstraint targetConstraint = targetSyncObject.AddComponent<ParentConstraint>();
-				targetConstraint.AddSource(new ConstraintSource()
+				ParentConstraint containerConstraint = addDampeningConstraint ? damping.AddComponent<ParentConstraint>() : targetSyncObject.AddComponent<ParentConstraint>();
+				containerConstraint.AddSource(new ConstraintSource()
 				{
 					sourceTransform = targetObject, weight = 1
 				});
-				targetConstraint.AddSource(new ConstraintSource()
+				containerConstraint.AddSource(new ConstraintSource()
 				{
 					sourceTransform = syncSystem.transform.Find("Set/Result"), weight = 0f
 				});
-				if (addDampeningConstraint)
-				{
-					targetConstraint.AddSource(new ConstraintSource()
-					{
-						sourceTransform = targetSyncObject.transform, weight = 0
-					});
-				}
-				targetConstraint.locked = true;
-				targetConstraint.constraintActive = true;	
+				containerConstraint.locked = true;
+				containerConstraint.constraintActive = true;	
 			}
 
 			if (centeredOnAvatar)
@@ -575,7 +590,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			#endregion
 
 			#region Result Displaying
-			string[] targetStrings = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)).ToArray();
+			string[] targetStrings = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(addDampeningConstraint ? x.transform.parent.Find($"{x.name} Damping Sync") : x.transform, descriptor.transform)).ToArray();
 
 			AnimationClip enableMeasure = GenerateClip("localMeasureEnabled");
 			AddCurve(enableMeasure, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 1));
@@ -585,7 +600,16 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
 				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
-				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[2].weight", AnimationCurve.Constant(0, 1/60f, 0));
+			}
+			
+			AnimationClip disableDamping = GenerateClip("localDisableDamping");
+			foreach (string targetPath in syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)))
+			{
+				AddCurve(disableDamping, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				AddCurve(disableDamping, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
+				
+				AddCurve(remoteParentConstraintOff, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
+				AddCurve(remoteParentConstraintOff, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
 			}
 			
 			ChildAnimatorState StateIdleRemote = GenerateChildState(new Vector3(30f, 180f, 0f), GenerateState("Idle/Remote"));
@@ -625,6 +649,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				localEnableTree.children = new[]
 				{
 					GenerateChildMotion(enableMeasure, directBlendParameter: "CustomObjectSync/One"),
+					GenerateChildMotion(disableDamping, directBlendParameter: "CustomObjectSync/One"),
 					GenerateChildMotion(initialTargetTree, directBlendParameter: "CustomObjectSync/One")
 				};
 				
@@ -656,15 +681,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				AnimationClip remoteParentConstraintOn = GenerateClip($"remoteParentConstraintEnabled{i}");
 				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 1));
 				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 0));
-				if (addDampeningConstraint)
-				{
-					AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
-					AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[2].weight", AnimationCurve.Constant(0, 1/60f, 1));
-				}
-				else
-				{
-					AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
-				}
+				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
 				return remoteParentConstraintOn;
 			}).ToArray();
 			AnimationClip[] constraintsDisabled = Enumerable.Range(0, targetStrings.Length).Select(i =>
@@ -673,15 +690,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				AnimationClip remoteParentConstraintOff = GenerateClip($"remoteParentConstraintDisabled{i}");
 				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 0));
 				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 0));
-				if (addDampeningConstraint)
-				{
-					AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
-					AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[2].weight", AnimationCurve.Constant(0, 1/60f, 1));
-				}
-				else
-				{
-					AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
-				}
+				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
 				return remoteParentConstraintOff;
 			}).ToArray();
 			
@@ -879,18 +888,27 @@ namespace VRLabs.CustomObjectSyncCreator
 					? GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/{name}{x}", name: $"CustomObjectSync/Temp/{name}{x}/{o}")).ToArray())
 					: GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Temp/{name}{x}/{o}", value: 0)).ToArray())
 			};
-			
-			endState.state.behaviours = new[]
+
+			if (copyBoth)
 			{
-				GenerateParameterDriver(new[] { GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Start{mode}/{o}", value: 0) })
-			};
+				endState.state.behaviours = new[]
+				{
+					GenerateParameterDriver(new[]
+					{
+						GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Start{mode}/{o}", value: 0) ,
+						GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/{mode}InProgress/{o}", value: 0)
+					})
+				};
+				startState.state.behaviours = startState.state.behaviours.Append(GenerateParameterDriver(new [] {GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/{mode}InProgress/{o}", value: 1)})).ToArray();
+			}
+
 			
 			if (!read && copyBoth)
 			{
 				endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Position{x}/{o}", name: $"CustomObjectSync/Position{x}")).ToArray())).ToArray();
 				endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Rotation{x}/{o}", name: $"CustomObjectSync/Rotation{x}")).ToArray())).ToArray();
-				startState.state.behaviours = startState.state.behaviours.Append(GenerateParameterDriver(Enumerable.Range(0 ,objectBits).Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Sync/Object{x}", name: $"CustomObjectSync/Temp/Object{x}")).ToArray())).ToArray();
-				endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(Enumerable.Range(0 ,objectBits).Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Object{x}", name: $"CustomObjectSync/Object{x}")).ToArray())).ToArray();
+				startState.state.behaviours = startState.state.behaviours.Append(GenerateParameterDriver(Enumerable.Range(0 ,objectBits).Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Sync/Object{x}", name: $"CustomObjectSync/Temp/Object{o}-{x}")).ToArray())).ToArray();
+				endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(Enumerable.Range(0 ,objectBits).Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Object{o}-{x}", name: $"CustomObjectSync/Object{x}")).ToArray())).ToArray();
 			}
 
 			List<List<ChildAnimatorState>> bitStates = new List<List<ChildAnimatorState>>();
@@ -946,7 +964,6 @@ namespace VRLabs.CustomObjectSyncCreator
 						.Append(GenerateCondition(AnimatorConditionMode.If, $"CustomObjectSync/Start{mode}/{o}", 0))
 						.Append(GenerateCondition( read ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, "IsLocal", 0)).ToArray())
 					).ToArray();
-			
 			startState.state.transitions = bitStates[0].Select((x, index) => GenerateBitTransition(permutations[index], 0, o, name, x.state, read)).ToArray();
 
 			for (var i = 0; i < bitStates.Count; i++)
@@ -974,7 +991,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				}
 			}
 
-			endState.state.transitions = new[] { GenerateTransition("", destinationState: initialState.state, hasExitTime: true, exitTime: 1.0f) };
+			endState.state.transitions = new[] { GenerateTransition("", destinationState: initialState.state, conditions: new []{GenerateCondition(AnimatorConditionMode.IfNot, $"CustomObjectSync/{mode}InProgress/{o}", 0f)}) };
 			
 			#endregion
 			
@@ -1019,44 +1036,42 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				Transform prefab = descriptor.transform.Find("Custom Object Sync");
 				Transform[] userObjects = Enumerable.Range(0, prefab.childCount)
-					.Select(x => prefab.GetChild(x)).Where(x => x.name != "Set" && x.name != "Measure" && x.name != "Target").ToArray();
-				foreach (Transform userObj in userObjects)
+					.Select(x => prefab.GetChild(x)).Where(x => x.name != "Set" && x.name != "Measure" && x.name != "Target"&& !x.name.Contains(" Damping Sync")).ToArray();
+				foreach (Transform userObject in userObjects)
 				{
-					ParentConstraint parentConstraint = userObj.GetComponent<ParentConstraint>();
-					if (parentConstraint != null)
+					ParentConstraint targetConstraint = userObject.GetComponent<ParentConstraint>();
+					if (targetConstraint != null)
 					{
-						Transform target = Enumerable.Range(0, parentConstraint.sourceCount)
-							.Select(x => parentConstraint.GetSource(x)).Where(x => x.sourceTransform.name.EndsWith("Target"))
-							.Select(x => x.sourceTransform).FirstOrDefault();
+						Transform dampingObj = targetConstraint.GetSource(0).sourceTransform;
+						ParentConstraint parentConstraint = dampingObj.gameObject.GetComponent<ParentConstraint>();
+						if (parentConstraint != null)
+						{
+							targetConstraint = parentConstraint;
+						}
+
+						Transform target = Enumerable.Range(0, targetConstraint.sourceCount)
+								.Select(x => targetConstraint.GetSource(x)).Where(x => x.sourceTransform.name.EndsWith("Target"))
+								.Select(x => x.sourceTransform).FirstOrDefault();
 						if (target != null)
 						{
-							string oldPath = AnimationUtility.CalculateTransformPath(userObj.transform, descriptor.transform);
-							userObj.parent = target.parent.transform;
-							string newPath = AnimationUtility.CalculateTransformPath(userObj.transform, descriptor.transform);
+							string oldPath = AnimationUtility.CalculateTransformPath(userObject.transform, descriptor.transform);
+							userObject.parent = target.parent.transform;
+							string newPath = AnimationUtility.CalculateTransformPath(userObject.transform, descriptor.transform);
 			
 							AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
 								.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
 								.ToArray();
 							RenameClipPaths(allClips, false, oldPath, newPath);
+							DestroyImmediate(target.gameObject);
 						}
 
-						DestroyImmediate(target.gameObject);
+						if (userObject.GetComponent<ParentConstraint>() != null)
+						{
+							DestroyImmediate(userObject.GetComponent<ParentConstraint>());
+						}
 					}
 				}
 				Transform result = prefab.Find("Set/Result");
-				if (result != null)
-				{
-					foreach (ParentConstraint positionConstraint in descriptor.transform.GetComponentsInChildren<ParentConstraint>()
-						         .Where(x =>
-						         {
-							         List<ConstraintSource> sources = new List<ConstraintSource>();
-							         x.GetSources(sources);
-							         return sources.Any(y => y.sourceTransform == result);
-						         }).ToArray())
-					{
-						DestroyImmediate(positionConstraint);
-					}
-				}
 				DestroyImmediate(prefab.gameObject);
 			}
 			

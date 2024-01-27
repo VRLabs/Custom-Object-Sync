@@ -42,32 +42,31 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			GUILayout.Space(2);
 
-			using (new HorizontalScope(GUI.skin.box))
+			
+			using (new VerticalScope(GUI.skin.box))
 			{
-				using (new HorizontalScope(GUILayout.MaxWidth(500)))
+				if (creator.useMultipleObjects)
 				{
-					if (creator.useMultipleObjects)
+					SerializedObject so = new SerializedObject(creator);
+					SerializedProperty prop = so.FindProperty("syncObjects");
+					ReorderableList list = new ReorderableList(so, prop, true, true, true, true);
+					list.drawHeaderCallback = rect =>
 					{
-						SerializedObject so = new SerializedObject(creator);
-						SerializedProperty prop = so.FindProperty("syncObjects");
-						ReorderableList list = new ReorderableList(so, prop, true, true, true, true);
-						list.drawHeaderCallback = rect =>
-						{
-							EditorGUI.LabelField(rect, "Objects To Sync");
-						};
-						list.drawElementCallback = (rect, index, active, focused) =>
-						{
-							SerializedProperty element = prop.GetArrayElementAtIndex(index);
-							EditorGUI.ObjectField(rect, element, typeof(GameObject));
-						};
-						list.DoLayoutList();
-						so.ApplyModifiedProperties();
-					}
-					else
+						EditorGUI.LabelField(rect, "Objects To Sync");
+					};
+					list.drawElementCallback = (rect, index, active, focused) =>
 					{
-						creator.syncObject = (GameObject)ObjectField("Object To Sync", creator.syncObject, typeof(GameObject), true);
-					}	
+						SerializedProperty element = prop.GetArrayElementAtIndex(index);
+						EditorGUI.ObjectField(rect, element, typeof(GameObject));
+					};
+					list.DoLayoutList();
+					so.ApplyModifiedProperties();
 				}
+				else
+				{
+					creator.syncObject = (GameObject)ObjectField("Object To Sync", creator.syncObject, typeof(GameObject), true);
+				}	
+				GUILayout.Space(2);
 				creator.useMultipleObjects = GUILayout.Toggle(creator.useMultipleObjects, "Sync Multiple Objects");
 			} 
 
