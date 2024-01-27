@@ -17,20 +17,8 @@ using Random = UnityEngine.Random;
 
 namespace VRLabs.CustomObjectSyncCreator
 {
-	public class CustomObjectSyncCreator
+	public class CustomObjectSyncCreator : ScriptableSingleton<CustomObjectSyncCreator>
 	{
-		private static CustomObjectSyncCreator instance;
-		public static CustomObjectSyncCreator Instance
-		{
-			get
-			{
-				if (instance == null)
-				{
-					instance = new CustomObjectSyncCreator();
-				}
-				return instance;
-			}
-		}
 
 		public GameObject syncObject;
 		public AnimatorController resourceController;
@@ -42,6 +30,8 @@ namespace VRLabs.CustomObjectSyncCreator
 		public bool rotationEnabled = true;
 		public bool centeredOnAvatar = false;
 		public bool addDampeningConstraint = false;
+		public bool useMultipleObjects = false;
+		public GameObject[] syncObjects;
 		public float dampingConstraintValue = 0.1f;
 
 		private string[] names = new[] { "X", "Y", "Z" };
@@ -816,6 +806,15 @@ namespace VRLabs.CustomObjectSyncCreator
 			return maxbitCount;
 		}
 
+		public int GetStepCount(int bits = -1)
+		{
+			bits = bits == -1 ? bitCount : bits;
+			var maxbitCount = GetMaxBitCount();
+			int objectCount = useMultipleObjects ? syncObjects.Count(x => x != null): 1;
+			int syncSteps = Mathf.CeilToInt(maxbitCount / (float)bits) * objectCount;
+			return syncSteps;
+		}
+
 		public AnimatorStateTransition GenerateBitTransition(bool[] values, int index, string parameterName, AnimatorState destinationState, bool read)
 		{
 			AnimatorStateTransition transition = null;
@@ -848,6 +847,25 @@ namespace VRLabs.CustomObjectSyncCreator
 		bool[][] GeneratePermutations(int size)
 		{
 			return Enumerable.Range(0, (int)Math.Pow(2, size)).Select(i => Enumerable.Range(0, size).Select(b => ((i & (1 << b)) > 0)).ToArray()).ToArray();
+		}
+
+		public bool ObjectPredicate(Func<GameObject, bool> predicate, bool any = true, bool ignoreNulls = true)
+		{
+			if (useMultipleObjects)
+			{
+				if (any)
+				{
+					return syncObjects.Where(x => !ignoreNulls || x != null).Any(predicate); 
+				}
+				else
+				{
+					return syncObjects.Where(x => !ignoreNulls || x != null).All(predicate);
+				}
+			}
+			else
+			{
+				return predicate(syncObject);
+			}
 		}
 		
 	}

@@ -2,12 +2,13 @@ using System;
 using System.Linq;
 using System.Text;
 using UnityEditor;
-using UnityEditor.Animations;
+using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Assertions.Must;
 using VRC.SDK3.Avatars.Components;
 using static UnityEditor.EditorGUILayout;
+using AnimatorController = UnityEditor.Animations.AnimatorController;
 
 namespace VRLabs.CustomObjectSyncCreator
 {
@@ -21,12 +22,14 @@ namespace VRLabs.CustomObjectSyncCreator
 			EditorWindow w = GetWindow<CustomObjectSyncCreatorWindow>();
 			w.titleContent = new GUIContent("Custom Object Sync");
 		}
-
-		private CustomObjectSyncCreatorWindow()
-		{
-			creator = CustomObjectSyncCreator.Instance;
-		}
 		
+		private void OnGUI()
+		{
+			if (creator == null)
+			{
+				creator = CustomObjectSyncCreator.instance;
+			}
+			
 			creator.resourceController ??= AssetDatabase.LoadAssetAtPath<AnimatorController>("Assets/VRLabs/CustomObjectSync/Resources/Custom Object Sync.controller");
 			creator.resourceController ??= AssetDatabase.LoadAssetAtPath<AnimatorController>(AssetDatabase.GUIDToAssetPath("6a164efbb993fd047a252ee32da1039b") ?? "");
 			
@@ -43,20 +46,61 @@ namespace VRLabs.CustomObjectSyncCreator
 			if (creator.resourcePrefab == null)
 			{
 				Debug.LogError("Prefab Asset not found. Please reimport the Custom Object Sync package.");
-				return;
+				return; 
 			}
 			
 			GUILayout.Space(2);
-			
-			creator.syncObject = (GameObject)ObjectField("Object To Sync", creator.syncObject, typeof(GameObject), true);
 
-			if (!creator.syncObject)
+			using (new HorizontalScope(GUI.skin.box))
+			{
+				using (new HorizontalScope(GUILayout.MaxWidth(500)))
+				{
+					if (creator.useMultipleObjects)
+					{
+						SerializedObject so = new SerializedObject(creator);
+						SerializedProperty prop = so.FindProperty("syncObjects");
+						ReorderableList list = new ReorderableList(so, prop, true, true, true, true);
+						list.drawHeaderCallback = rect =>
+						{
+							EditorGUI.LabelField(rect, "Objects To Sync");
+						};
+						list.drawElementCallback = (rect, index, active, focused) =>
+						{
+							SerializedProperty element = prop.GetArrayElementAtIndex(index);
+							EditorGUI.ObjectField(rect, element, typeof(GameObject));
+						};
+						list.DoLayoutList();
+						so.ApplyModifiedProperties();
+					}
+					else
+					{
+						creator.syncObject = (GameObject)ObjectField("Object To Sync", creator.syncObject, typeof(GameObject), true);
+					}	
+				}
+				creator.useMultipleObjects = GUILayout.Toggle(creator.useMultipleObjects, "Sync Multiple Objects");
+			} 
+
+			if (!creator.ObjectPredicate(x => x != null))
 			{
 				GUILayout.Label("Please select an object to sync.");
 				return;
 			}
 
-			VRCAvatarDescriptor descriptor = creator.syncObject.GetComponentInParent<VRCAvatarDescriptor>();
+			if (creator.useMultipleObjects && creator.syncObjects.Count(x => x != null) != creator.syncObjects.Where(x => x != null).Distinct().Count())
+			{
+				GUILayout.Label("Please select distinct objects to sync.");
+				return;
+			}
+			
+			VRCAvatarDescriptor descriptor = null;
+			if (creator.useMultipleObjects)
+			{
+				descriptor = creator.syncObjects.FirstOrDefault(x => x != null)?.GetComponentInParent<VRCAvatarDescriptor>();
+			}
+			else
+			{
+				descriptor = creator.syncObject.GetComponentInParent<VRCAvatarDescriptor>();
+			}
 			
 			if (!descriptor)
 			{
@@ -87,17 +131,19 @@ namespace VRLabs.CustomObjectSyncCreator
 						}
 					}
 					GUILayout.FlexibleSpace();
-				}			
+				}
+
+				return;
 			}
 
 			
-			if (creator.syncObject.GetComponent<ParentConstraint>())
+			if (creator.ObjectPredicate(x => x.GetComponent<ParentConstraint>()!= null))
 			{
 				GUILayout.Label("Object has a Parent Constraint component. Please remove this component to continue.");
 				return;
 			}
 			
-			if (Equals(descriptor.gameObject, creator.syncObject))
+			if (creator.ObjectPredicate(x => Equals(descriptor.gameObject, x)))
 			{
 				GUILayout.Label("Object has a VRC Avatar Descriptor. The object you select should be the object you want to sync, not the avatar.");
 				return;
@@ -132,8 +178,11 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			var maxbitCount = creator.GetMaxBitCount();
 			
-			int syncSteps = Mathf.CeilToInt(maxbitCount / (float)creator.bitCount);
-			while (syncSteps == Mathf.CeilToInt(maxbitCount / (float)(creator.bitCount - 1)) && creator.bitCount != 1)
+			int objectCount = creator.useMultipleObjects ? creator.syncObjects.Count(x => x != null): 1;
+
+			int syncSteps = creator.GetStepCount();
+			
+			while (syncSteps == creator.GetStepCount(creator.bitCount - 1) && creator.bitCount != 1)
 			{
 				creator.bitCount--;
 			}
@@ -142,7 +191,8 @@ namespace VRLabs.CustomObjectSyncCreator
 				GUILayout.Label($"Bits per Sync: {creator.bitCount}", new GUILayoutOption[]{ GUILayout.MaxWidth(360)});
 				if (GUILayout.Button(EditorGUIUtility.IconContent("d_Toolbar Minus")) && creator.bitCount != 1)
 				{
-					while (syncSteps == Mathf.CeilToInt(maxbitCount / (float)(creator.bitCount)) && creator.bitCount != 1)
+					creator.bitCount--;
+					while (creator.GetStepCount() == creator.GetStepCount(creator.bitCount-1) && creator.bitCount != 1)
 					{
 						creator.bitCount--;
 					}
@@ -150,11 +200,15 @@ namespace VRLabs.CustomObjectSyncCreator
 
 				if (GUILayout.Button(EditorGUIUtility.IconContent("d_Toolbar Plus")) && creator.bitCount != maxbitCount)
 				{
-					creator.bitCount++;
-					while ((syncSteps - 1 == Mathf.CeilToInt(maxbitCount / (float)(creator.bitCount + 1))  || syncSteps == Mathf.CeilToInt(maxbitCount / (float)(creator.bitCount + 1))) && creator.bitCount != maxbitCount)
+					while (syncSteps == creator.GetStepCount(creator.bitCount + 1) && creator.bitCount != maxbitCount)
 					{
 						creator.bitCount++;
-					} 
+					}
+
+					if (creator.bitCount != maxbitCount + 1)
+					{
+						creator.bitCount++;
+					}
 				}
 			}
 			
@@ -180,7 +234,7 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			GUILayout.Space(2);
 
-			int parameterCount = Mathf.CeilToInt(Mathf.Log(syncSteps + 1, 2)); 
+			int parameterCount = Mathf.CeilToInt(Mathf.Log(syncSteps + 1, 2));
 			GUI.contentColor = Color.white;
 
 			using (new HorizontalScope(GUI.skin.box))
