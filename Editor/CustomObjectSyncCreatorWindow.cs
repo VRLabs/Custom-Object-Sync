@@ -30,15 +30,6 @@ namespace VRLabs.CustomObjectSyncCreator
 				creator = CustomObjectSyncCreator.instance;
 			}
 			
-			creator.resourceController ??= AssetDatabase.LoadAssetAtPath<AnimatorController>("Assets/VRLabs/CustomObjectSync/Resources/Custom Object Sync.controller");
-			creator.resourceController ??= AssetDatabase.LoadAssetAtPath<AnimatorController>(AssetDatabase.GUIDToAssetPath("6a164efbb993fd047a252ee32da1039b") ?? "");
-			
-			if (creator.resourceController == null)
-			{
-				GUILayout.Label("Asset controller not found. Please reimport the Custom Object Sync package.");
-				return;
-			}
-			
 			creator.resourcePrefab ??= AssetDatabase.LoadAssetAtPath<GameObject>("Assets/VRLabs/CustomObjectSync/Resources/Custom Object Sync.prefab");
 			creator.resourcePrefab ??= AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath("d51eb264fa89a5b4d9b95f344f169766") ?? "");
 
@@ -92,15 +83,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				return;
 			}
 			
-			VRCAvatarDescriptor descriptor = null;
-			if (creator.useMultipleObjects)
-			{
-				descriptor = creator.syncObjects.FirstOrDefault(x => x != null)?.GetComponentInParent<VRCAvatarDescriptor>();
-			}
-			else
-			{
-				descriptor = creator.syncObject.GetComponentInParent<VRCAvatarDescriptor>();
-			}
+			VRCAvatarDescriptor descriptor = creator.syncObjects.FirstOrDefault(x => x != null)?.GetComponentInParent<VRCAvatarDescriptor>();
 			
 			if (!descriptor)
 			{
@@ -160,7 +143,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			GUILayout.Space(2);
 
 			string positionString = $"Position Precision: {FloatToStringConverter.Convert((float)Math.Pow(0.5, creator.positionPrecision) * 100)}cm";
-			creator.positionPrecision = DisplayInt(positionString,  creator.positionPrecision, 0, 16);
+			creator.positionPrecision = DisplayInt(positionString,  creator.positionPrecision, 1, 16);
 
 			GUILayout.Space(2);
 
@@ -178,10 +161,10 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			var maxbitCount = creator.GetMaxBitCount();
 			
-			int objectCount = creator.useMultipleObjects ? creator.syncObjects.Count(x => x != null): 1;
 
 			int syncSteps = creator.GetStepCount();
-			
+			int objectCount = creator.useMultipleObjects ? creator.syncObjects.Count(x => x != null): 1;
+
 			while (syncSteps == creator.GetStepCount(creator.bitCount - 1) && creator.bitCount != 1)
 			{
 				creator.bitCount--;
@@ -235,12 +218,13 @@ namespace VRLabs.CustomObjectSyncCreator
 			GUILayout.Space(2);
 
 			int parameterCount = Mathf.CeilToInt(Mathf.Log(syncSteps + 1, 2));
+			int objectParameterCount = Mathf.CeilToInt(Mathf.Log(objectCount, 2));
 			GUI.contentColor = Color.white;
 
 			using (new HorizontalScope(GUI.skin.box))
 			{
 				GUILayout.FlexibleSpace();
-				GUILayout.Label($"Sync Steps: {syncSteps}, Parameter Usage: {parameterCount + creator.bitCount + 1}, Time per Sync: {syncSteps * (1/5f) + (Math.Max(creator.rotationPrecision, creator.maxRadius + creator.positionPrecision)) * 1.5f/60f, 4:F3}s", new  [] { GUILayout.ExpandWidth(true) });
+				GUILayout.Label($"Sync Steps: {syncSteps}, Parameter Usage: {objectParameterCount + parameterCount + creator.bitCount + 1}, Time per Sync: {objectParameterCount * syncSteps * (1/5f) + (Math.Max(creator.rotationPrecision, creator.maxRadius + creator.positionPrecision)) * 1.5f/60f, 4:F3}s", new  [] { GUILayout.ExpandWidth(true) });
 				GUILayout.FlexibleSpace();
 			}
 

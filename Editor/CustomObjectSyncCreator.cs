@@ -10,6 +10,7 @@ using UnityEngine;
 using UnityEngine.Animations;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
+using VRC.SDKBase;
 using static VRC.SDKBase.VRC_AvatarParameterDriver;
 using static VRLabs.CustomObjectSyncCreator.ControllerGenerationMethods;
 using Object = UnityEngine.Object;
@@ -19,8 +20,6 @@ namespace VRLabs.CustomObjectSyncCreator
 {
 	public class CustomObjectSyncCreator : ScriptableSingleton<CustomObjectSyncCreator>
 	{
-
-		public GameObject syncObject;
 		public AnimatorController resourceController;
 		public GameObject resourcePrefab;
 		public int bitCount = 16;
@@ -34,15 +33,46 @@ namespace VRLabs.CustomObjectSyncCreator
 		public GameObject[] syncObjects;
 		public float dampingConstraintValue = 0.1f;
 
-		private string[] names = new[] { "X", "Y", "Z" };
+		public const string STANDARD_NEW_ANIMATION_FOLDER = "Assets/VRLabs/GeneratedAssets/Animations/";
+		public const string STANDARD_NEW_ANIMATOR_FOLDER = "Assets/VRLabs/GeneratedAssets/Animators/";
+		public const string STANDARD_NEW_PARAMASSET_FOLDER = "Assets/VRLabs/GeneratedAssets/ExpressionParameters/";
+		public const string STANDARD_NEW_MENUASSET_FOLDER = "Assets/VRLabs/GeneratedAssets/ExpressionMenu/";
+		
+		public GameObject syncObject
+		{
+			get
+			{
+				syncObjects ??= new GameObject[1];
+				Array.Resize(ref syncObjects, 1);
+				return syncObjects[0];
+			}
+			set
+			{
+				syncObjects ??= new GameObject[1];
+				Array.Resize(ref syncObjects, 1);
+				syncObjects[0] = value;
+			}
+			
+		}
+		
+		private string[] axis = new[] { "X", "Y", "Z" };
 		public void Generate()
 		{
 			AnimatorController mergedController = null;
 
-			VRCAvatarDescriptor descriptor = syncObject.GetComponentInParent<VRCAvatarDescriptor>();
+			syncObjects = syncObjects.Where(x => x != null).ToArray();
+			
+			VRCAvatarDescriptor descriptor = syncObjects.Select(x => x.GetComponentInParent<VRCAvatarDescriptor>()).FirstOrDefault();
 			
 			if (descriptor == null) return;
 
+			int syncSteps = Mathf.CeilToInt(GetMaxBitCount() / (float)bitCount);
+			int syncStepParameterCount = Mathf.CeilToInt(Mathf.Log(syncSteps, 2));
+			bool[][] syncStepPerms = GeneratePermutations(syncStepParameterCount);
+			int objectCount = syncObjects.Count(x => x != null);
+			int objectParameterCount = Mathf.CeilToInt(Mathf.Log(objectCount, 2));
+			bool[][] objectPerms = GeneratePermutations(objectParameterCount);
+			
 			#region Resource Setup
 
 			descriptor.customizeAnimationLayers = true;
@@ -54,33 +84,33 @@ namespace VRLabs.CustomObjectSyncCreator
 			VRCExpressionParameters parameterObject = descriptor.expressionParameters;
 			VRCExpressionsMenu menuObject = descriptor.expressionsMenu;
 			
+			Directory.CreateDirectory(STANDARD_NEW_ANIMATOR_FOLDER);
+			string uniqueControllerPath = AssetDatabase.GenerateUniqueAssetPath(STANDARD_NEW_ANIMATOR_FOLDER + "CustomObjectCreator.controller");
 			if (mergeController == null)
 			{
-				Directory.CreateDirectory(AnimatorUtils.STANDARD_NEW_ANIMATOR_FOLDER);
-				string uniquePath = AssetDatabase.GenerateUniqueAssetPath(AnimatorUtils.STANDARD_NEW_ANIMATOR_FOLDER + "CustomObjectCreator.controller");
-				AssetDatabase.CopyAsset(AssetDatabase.GetAssetPath(resourceController), uniquePath);
-				AssetDatabase.SaveAssets();
-				AssetDatabase.Refresh();
-				mergedController = AssetDatabase.LoadAssetAtPath<AnimatorController>(uniquePath);
+				mergeController = new AnimatorController();
+				AssetDatabase.CreateAsset(mergeController, uniqueControllerPath);
 			}
 			else
 			{
-				mergedController = AnimatorUtils.MergeControllers(mergeController, resourceController,
-					new Dictionary<string, string>(), true);
+				AssetDatabase.CopyAsset(AssetDatabase.GetAssetPath(mergeController), uniqueControllerPath);
 			}
-			
+
+			AssetDatabase.SaveAssets();
+			AssetDatabase.Refresh();
+			mergedController = AssetDatabase.LoadAssetAtPath<AnimatorController>(uniqueControllerPath);
+
 			if (mergedController == null)
 			{
 				Debug.LogError("Creation of Controller object failed. Please report this to jellejurre on the VRLabs discord at discord.vrlabs.dev");
 				return;
 			}
-
-
+			
 			if (parameterObject == null)
 			{
-				Directory.CreateDirectory(AnimatorUtils.STANDARD_NEW_PARAMASSET_FOLDER);
-				string uniquePath = AssetDatabase.GenerateUniqueAssetPath(AnimatorUtils.STANDARD_NEW_PARAMASSET_FOLDER + "Parameters.asset");
-				parameterObject = ScriptableObject.CreateInstance<VRCExpressionParameters>();
+				Directory.CreateDirectory(STANDARD_NEW_PARAMASSET_FOLDER);
+				string uniquePath = AssetDatabase.GenerateUniqueAssetPath(STANDARD_NEW_PARAMASSET_FOLDER + "Parameters.asset");
+				parameterObject = CreateInstance<VRCExpressionParameters>();
 				parameterObject.parameters = Array.Empty<VRCExpressionParameters.Parameter>();
 				AssetDatabase.CreateAsset(parameterObject, uniquePath);
 				AssetDatabase.SaveAssets();
@@ -96,9 +126,9 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			if (menuObject == null)
 			{
-				Directory.CreateDirectory(AnimatorUtils.STANDARD_NEW_MENUASSET_FOLDER);
-				string uniquePath = AssetDatabase.GenerateUniqueAssetPath(AnimatorUtils.STANDARD_NEW_MENUASSET_FOLDER + "Menu.asset");
-				menuObject = ScriptableObject.CreateInstance<VRCExpressionsMenu>();
+				Directory.CreateDirectory(STANDARD_NEW_MENUASSET_FOLDER);
+				string uniquePath = AssetDatabase.GenerateUniqueAssetPath(STANDARD_NEW_MENUASSET_FOLDER + "Menu.asset");
+				menuObject = CreateInstance<VRCExpressionsMenu>();
 				menuObject.controls = new List<VRCExpressionsMenu.Control>();
 				AssetDatabase.CreateAsset(menuObject, uniquePath);
 				AssetDatabase.SaveAssets();
@@ -118,81 +148,130 @@ namespace VRLabs.CustomObjectSyncCreator
 			#endregion
 			
 			#region Bit Conversion
-			AnimatorStateMachine positionMachine = GenerateStateMachine("CustomObjectSync/Position Bit Convert", new Vector3(-80, 0, 0), new Vector3(-80, 200 , 0), new Vector3(-80, 100, 0));
-			AnimatorControllerLayer positionLayer = GenerateLayer("CustomObjectSync/Position Bit Convert", positionMachine);
-			ChildAnimatorState initialState = GenerateChildState(new Vector3(-100, 400, 0), GenerateState("Initial", motion: buffer));
-
-
 			int positionBits = maxRadius + positionPrecision;
 			int rotationBits = rotationEnabled ? rotationPrecision : 0;
-			SetupAnimationControllerCopy("Position", buffer, initialState, positionMachine, positionBits,  true, positionBits > rotationBits);
-			SetupAnimationControllerCopy("Position", buffer, initialState, positionMachine, positionBits,  false, positionBits > rotationBits);
-			positionMachine.states = new[] { initialState }.Concat(positionMachine.states).ToArray();
-			positionMachine.defaultState = initialState.state;
 
-			AnimatorControllerLayer rotationLayer = null;
-			if (rotationEnabled)
+			List<AnimatorControllerLayer> bitLayers = new List<AnimatorControllerLayer>();
+			for (int o = 0; o < objectCount; o++)
 			{
-				AnimatorStateMachine rotationMachine = GenerateStateMachine("CustomObjectSync/Rotation Bit Convert", new Vector3(-80, 0, 0), new Vector3(-80, 200 , 0), new Vector3(-80, 100, 0));
-				rotationLayer = GenerateLayer("CustomObjectSync/Rotation Bit Convert", rotationMachine);
-				ChildAnimatorState initialRotationState = GenerateChildState(new Vector3(-100, 400, 0), GenerateState("Initial", motion: buffer));
+				AnimatorStateMachine positionMachine = GenerateStateMachine($"CustomObjectSync/Position Bit Convert{o}", new Vector3(-80, 0, 0), new Vector3(-80, 200 , 0), new Vector3(-80, 100, 0));
+				AnimatorControllerLayer positionLayer = GenerateLayer($"CustomObjectSync/Position Bit Convert{o}", positionMachine);
+				ChildAnimatorState initialState = GenerateChildState(new Vector3(-100, 400, 0), GenerateState("Initial", motion: buffer));
+			
+				SetupAnimationControllerCopy("Position", o, buffer, initialState, positionMachine, positionBits, objectParameterCount, true, positionBits > rotationBits);
+				SetupAnimationControllerCopy("Position", o, buffer, initialState, positionMachine, positionBits, objectParameterCount, false, positionBits > rotationBits);
+				positionMachine.states = new[] { initialState }.Concat(positionMachine.states).ToArray();
+				positionMachine.defaultState = initialState.state;
+				bitLayers.Add(positionLayer);
+				
+				if (rotationEnabled)
+				{
+					AnimatorStateMachine rotationMachine = GenerateStateMachine($"CustomObjectSync/Rotation Bit Convert{o}", new Vector3(-80, 0, 0), new Vector3(-80, 200 , 0), new Vector3(-80, 100, 0));
+					AnimatorControllerLayer rotationLayer = GenerateLayer($"CustomObjectSync/Rotation Bit Convert{o}", rotationMachine);
+					ChildAnimatorState initialRotationState = GenerateChildState(new Vector3(-100, 400, 0), GenerateState("Initial", motion: buffer));
 
-				SetupAnimationControllerCopy("Rotation", buffer, initialRotationState, rotationMachine, rotationBits,  true, positionBits <= rotationBits);	
-				SetupAnimationControllerCopy("Rotation", buffer, initialRotationState, rotationMachine, rotationBits,  false, positionBits <= rotationBits);	
-				rotationMachine.states = new[] { initialRotationState }.Concat(rotationMachine.states).ToArray();
-				rotationMachine.defaultState = initialRotationState.state;
+					SetupAnimationControllerCopy("Rotation", o, buffer, initialRotationState, rotationMachine, rotationBits, objectParameterCount,  true, positionBits <= rotationBits);	
+					SetupAnimationControllerCopy("Rotation", o, buffer, initialRotationState, rotationMachine, rotationBits, objectParameterCount, false, positionBits <= rotationBits);	
+					rotationMachine.states = new[] { initialRotationState }.Concat(rotationMachine.states).ToArray();
+					rotationMachine.defaultState = initialRotationState.state;
+					bitLayers.Add(rotationLayer);
+				}	
 			}
 
 			#endregion
 
 			#region Bit Parameters
-			List<AnimatorControllerParameter> parameters = new List<AnimatorControllerParameter>();
-			for (int p = 0; p < names.Length; p++)
+
+			List<AnimatorControllerParameter> parameters = new List<AnimatorControllerParameter>()
 			{
-				parameters.Add(GenerateFloatParameter($"CustomObjectSync/Temp/Position{names[p]}"));
-			}
+				GenerateBoolParameter("IsLocal"),
+				GenerateFloatParameter("CustomObjectSync/One", defaultFloat: 1f),
+				GenerateFloatParameter("CustomObjectSync/AngleMagX_Angle"),
+				GenerateFloatParameter("CustomObjectSync/AngleMagY_Angle"),
+				GenerateFloatParameter("CustomObjectSync/AngleMagZ_Angle"),
+				GenerateFloatParameter("CustomObjectSync/AngleSignX_Angle"),
+				GenerateFloatParameter("CustomObjectSync/AngleSignY_Angle"),
+				GenerateFloatParameter("CustomObjectSync/AngleSignZ_Angle"),
+				GenerateFloatParameter("CustomObjectSync/RotationX"),
+				GenerateFloatParameter("CustomObjectSync/RotationY"),
+				GenerateFloatParameter("CustomObjectSync/RotationZ"),
+				GenerateFloatParameter("CustomObjectSync/PositionX"),
+				GenerateFloatParameter("CustomObjectSync/PositionY"),
+				GenerateFloatParameter("CustomObjectSync/PositionZ"),
+				GenerateFloatParameter("CustomObjectSync/PositionXPos"),
+				GenerateFloatParameter("CustomObjectSync/PositionXNeg"),
+				GenerateFloatParameter("CustomObjectSync/PositionYPos"),
+				GenerateFloatParameter("CustomObjectSync/PositionYNeg"),
+				GenerateFloatParameter("CustomObjectSync/PositionZPos"),
+				GenerateFloatParameter("CustomObjectSync/PositionZNeg"),
+				GenerateBoolParameter("CustomObjectSync/SetStage"),
+				GenerateBoolParameter("CustomObjectSync/Enabled")
+			};
 			
-			for (int p = 0; p < names.Length; p++)
+
+			
+			for (int p = 0; p < axis.Length; p++)
 			{
 				for (int b = 0; b < positionBits; b++)
 				{
-					parameters.Add(GenerateBoolParameter($"CustomObjectSync/Bits/Position{names[p]}{b}"));
-					parameters.Add(GenerateBoolParameter($"CustomObjectSync/Bits/Copy/Position{names[p]}{b}"));
+					parameters.Add(GenerateBoolParameter($"CustomObjectSync/Bits/Copy/Position{axis[p]}{b}"));
 				}				
 			}
 
-			if (rotationEnabled)
+			for (int o = 0; o < objectCount; o++)
 			{
-				for (int p = 0; p < names.Length; p++)
+				parameters.Add(GenerateBoolParameter($"CustomObjectSync/ReadObject/{o}"));
+				parameters.Add(GenerateBoolParameter($"CustomObjectSync/StartWrite/{o}"));
+				parameters.Add(GenerateBoolParameter($"CustomObjectSync/StartRead/{o}"));
+				for (int p = 0; p < axis.Length; p++)
 				{
-					parameters.Add(GenerateFloatParameter($"CustomObjectSync/Temp/Rotation{names[p]}"));
-				}
-			
-				for (int p = 0; p < names.Length; p++)
-				{
-					for (int b = 0; b < rotationBits; b++)
+					parameters.Add(GenerateFloatParameter($"CustomObjectSync/Temp/Position{axis[p]}/{o}"));
+					for (int b = 0; b < positionBits; b++)
 					{
-						parameters.Add(GenerateBoolParameter($"CustomObjectSync/Bits/Rotation{names[p]}{b}"));
-						parameters.Add(GenerateBoolParameter($"CustomObjectSync/Bits/Copy/Rotation{names[p]}{b}"));
+						parameters.Add(GenerateBoolParameter($"CustomObjectSync/Bits/Position{axis[p]}{b}/{o}"));
 					}				
 				}
 			}
-			mergedController.parameters = mergedController.parameters.Concat(parameters).ToArray();
-			#endregion
 
-			mergedController.layers = mergedController.layers.Append(positionLayer).ToArray();
+			for (int b = 0; b < objectParameterCount; b++)
+			{
+				parameters.Add(GenerateFloatParameter($"CustomObjectSync/LocalReadBit{b}"));
+			}
+			
+
 			if (rotationEnabled)
 			{
-				mergedController.layers = mergedController.layers.Append(rotationLayer).ToArray();
+				for (int p = 0; p < axis.Length; p++)
+				{
+					for (int b = 0; b < rotationBits; b++)
+					{
+						parameters.Add(GenerateBoolParameter($"CustomObjectSync/Bits/Copy/Rotation{axis[p]}{b}"));
+					}				
+				}
+
+				for (int o = 0; o < objectCount; o++)
+				{
+					for (int p = 0; p < axis.Length; p++)
+					{
+						parameters.Add(GenerateFloatParameter($"CustomObjectSync/Temp/Rotation{axis[p]}/{o}"));
+						for (int b = 0; b < rotationBits; b++)
+						{
+							parameters.Add(GenerateBoolParameter($"CustomObjectSync/Bits/Rotation{axis[p]}{b}/{o}"));
+						}				
+					}
+				}
 			}
+			
+			
+			mergedController.parameters = mergedController.parameters.Concat(parameters.Where(p => mergedController.parameters.All(x => x.name != p.name))).ToArray();
+			#endregion
+
+			mergedController.layers = mergedController.layers.Concat(bitLayers).ToArray();
 			
 			// Sync Steps
 			AnimatorStateMachine syncMachine = GenerateStateMachine("CustomObjectSync/Sync", new Vector3(-80, 0, 0), new Vector3(-80, 200 , 0), new Vector3(-80, 100, 0));
 			AnimatorControllerLayer syncLayer = GenerateLayer("CustomObjectSync/Sync", syncMachine);
-			int syncSteps = Mathf.CeilToInt(GetMaxBitCount() / (float)bitCount);
-			int syncStepBools = Mathf.CeilToInt(Mathf.Log(syncSteps, 2));
-			bool[][] syncStepPerms = GeneratePermutations(syncStepBools);
-			
+
 			AnimationClip bufferWaitInit = GenerateClip($"BufferWait{(int)(syncSteps*1.5f)}");
 			AddCurve(bufferWaitInit, "Custom Object Sync/Measure", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, ((Math.Max(positionBits, rotationBits)*1.5f))/60f, 0));
 			AddCurve(bufferWaitInit, "Custom Object Sync/Set", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, ((Math.Max(positionBits, rotationBits)*1.5f))/60f, 0));
@@ -207,50 +286,62 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			#region SyncStates
 			ChildAnimatorState initState = GenerateChildState(new Vector3(-100, -150, 0), GenerateState("SyncInit", motion: enableWorldConstraint));
-			string[] syncParameterNames = names
+			string[] syncParameterNames = axis
 				.SelectMany(n => Enumerable.Range(0, positionBits).Select(i => $"CustomObjectSync/Bits/Copy/Position{n}{i}"))
-				.Concat(names.SelectMany(n =>
+				.Concat(axis.SelectMany(n =>
 					Enumerable.Range(0, rotationBits).Select(i => $"CustomObjectSync/Bits/Copy/Rotation{n}{i}"))).ToArray();
-			string[] localSyncParameterNames = names
-				.SelectMany(n => Enumerable.Range(0, positionBits).Select(i => $"CustomObjectSync/Bits/Position{n}{i}"))
-				.Concat(names.SelectMany(n =>
-					Enumerable.Range(0, rotationBits).Select(i => $"CustomObjectSync/Bits/Rotation{n}{i}"))).ToArray();
+			string[][] localSyncParameterNames = Enumerable.Range(0, objectCount).Select(o => axis
+				.SelectMany(n => Enumerable.Range(0, positionBits).Select(i => $"CustomObjectSync/Bits/Position{n}{i}/{o}"))
+				.Concat(axis.SelectMany(n =>
+					Enumerable.Range(0, rotationBits).Select(i => $"CustomObjectSync/Bits/Rotation{n}{i}/{o}"))).ToArray()).ToArray();
 
 			int stepToStartSync = Mathf.CeilToInt(Math.Max(positionBits, rotationBits) / 12f);
 			bool shouldDelayFirst = (stepToStartSync > syncSteps);
-			
+
+			if (shouldDelayFirst)
+			{
+				stepToStartSync = syncSteps;
+			}
 			
 			List<ChildAnimatorState> localStates = new List<ChildAnimatorState>();
-			for (int i = 0; i < syncSteps; i++)
+
+			int totalSyncSteps = objectCount * syncSteps;
+			
+			for (int i = 0; i < totalSyncSteps; i++)
 			{
-				localStates.Add(GenerateChildState(new Vector3(-500,-(syncSteps) * 25 + ((i + 1) * 50), 0), GenerateState($"SyncLocal{i}", motion: bufferWaitSync)));
-				if (shouldDelayFirst)
+				int o = i / syncSteps;
+				int s = i % syncSteps;
+				localStates.Add(GenerateChildState(new Vector3(-500,-(totalSyncSteps) * 25 + ((i + 1) * 50), 0), GenerateState($"SyncLocal{i}", motion: bufferWaitSync)));
+				if (shouldDelayFirst && i % syncSteps == 0)
 				{
 					localStates.Last().state.motion = bufferWaitInit;
 				}
 				
-				if (i == syncSteps - 1)
+				if (i % syncSteps == syncSteps - 1)
 				{
 					// When we begin sending copy out values so we have them ready to send
 					localStates.Last().state.behaviours = localStates.Last().state.behaviours
-						.Append(GenerateParameterDriver(Enumerable.Range(0, syncParameterNames.Length).Select(x => GenerateParameter(ChangeType.Copy, localSyncParameterNames[x], syncParameterNames[x])).ToArray())).ToArray(); 
+						.Append(GenerateParameterDriver(Enumerable.Range(0, syncParameterNames.Length).Select(x => GenerateParameter(ChangeType.Copy, localSyncParameterNames[(o + 1) % objectCount][x], syncParameterNames[x])).ToArray())).ToArray(); 
 				}
-				if (syncSteps - i == stepToStartSync)
+				
+				if (syncSteps - s == stepToStartSync)
 				{
 					localStates.Last().state.behaviours = localStates.Last().state.behaviours
-						.Append(GenerateParameterDriver(new[]
-							{ GenerateParameter(ChangeType.Set, name: "CustomObjectSync/StartRead", value: 1) }))
+						.Append(GenerateParameterDriver(
+							Enumerable.Range(0, objectParameterCount).Select(x => GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/LocalReadBit{x}", value: objectPerms[(o + 1) % objectCount][x] ? 1f : 0f)).Append(
+							GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/StartRead/{(o + 1) % objectCount}", value: 1)).ToArray()))
 						.ToArray();
 				}
 
 				
-				localStates.Add(GenerateChildState(new Vector3(-800, -(syncSteps) * 25 + ((i + 1) * 50), 0), GenerateState($"SyncLocal{i}Buffer", motion: bufferWaitSync)));
+				localStates.Add(GenerateChildState(new Vector3(-800, -(totalSyncSteps) * 25 + ((i + 1) * 50), 0), GenerateState($"SyncLocal{i}Buffer", motion: bufferWaitSync)));
 				localStates.Last().state.behaviours = new[]
 				{
-					GenerateParameterDriver(Enumerable.Range(0, syncStepBools).Select(x => GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Sync/Step{x}", value: syncStepPerms[(i + 1) % (syncSteps)][x] ? 1 : 0)).ToArray()),
+					GenerateParameterDriver(Enumerable.Range(0, syncStepParameterCount).Select(x => GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Sync/Step{x}", value: syncStepPerms[(i + 1) % (syncSteps)][x] ? 1 : 0)).ToArray()),
+					GenerateParameterDriver(Enumerable.Range(0, objectParameterCount).Select(x => GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Sync/Object{x}", value: objectPerms[((i + 1) % (totalSyncSteps))/ syncSteps][x] ? 1 : 0)).ToArray()),
 					GenerateParameterDriver(
 						Enumerable
-							.Range(((i + 1) % syncSteps) * bitCount, Math.Min((((i + 1) % syncSteps) + 1) * bitCount, GetMaxBitCount()) - ((((i + 1) % syncSteps)) * bitCount))
+							.Range(((s + 1) % syncSteps) * bitCount, Math.Min((((s + 1) % syncSteps) + 1) * bitCount, GetMaxBitCount()) - ((((s + 1) % syncSteps)) * bitCount))
 							.Select(x => GenerateParameter(ChangeType.Copy, source: syncParameterNames[x],
 								name: $"CustomObjectSync/Sync/Data{x % bitCount}"))
 							.ToArray())
@@ -258,24 +349,28 @@ namespace VRLabs.CustomObjectSyncCreator
 			}
 			
 			List<ChildAnimatorState> remoteStates = new List<ChildAnimatorState>();
-			for (int i = 0; i < syncSteps; i++)
+			for (int i = 0; i < totalSyncSteps; i++)
 			{
-				remoteStates.Add(GenerateChildState(new Vector3(300, -(syncSteps) * 25 + ((i + 1) * 50), 0), GenerateState($"SyncRemote{i}", motion: bufferWaitSync)));
+				int o = i / syncSteps;
+				int s = i % syncSteps;
+				remoteStates.Add(GenerateChildState(new Vector3(300, -(totalSyncSteps) * 25 + ((i + 1) * 50), 0), GenerateState($"SyncRemote{i}", motion: bufferWaitSync)));
 				remoteStates.Last().state.behaviours = new[]
 				{
 					GenerateParameterDriver(
 						Enumerable
-							.Range(i * bitCount, Math.Min((i + 1) * bitCount, GetMaxBitCount()) - (i * bitCount))
+							.Range(s * bitCount, Math.Min((s + 1) * bitCount, GetMaxBitCount()) - (s * bitCount))
 							.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Sync/Data{x % bitCount}", name: syncParameterNames[x]))
 							.ToArray())
 				};
+				if (s == syncSteps - 1)
+				{
+					remoteStates.Last().state.behaviours = 
+						remoteStates.Last().state.behaviours.Append(GenerateParameterDriver(new [] {GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/StartWrite/{o}", value: 1)})).ToArray();
+					remoteStates.Last().state.behaviours = remoteStates.Last().state.behaviours
+						.Append(GenerateParameterDriver(Enumerable.Range(0, syncParameterNames.Length).Select(x => GenerateParameter(ChangeType.Copy, syncParameterNames[x], localSyncParameterNames[o][x])).ToArray())).ToArray();
+				}
 			}
-
-			remoteStates.Last().state.behaviours =
-				remoteStates.Last().state.behaviours.Append(GenerateParameterDriver(new [] {GenerateParameter(ChangeType.Set, name: "CustomObjectSync/StartWrite", value: 1)})).ToArray();
-			remoteStates.Last().state.behaviours = remoteStates.Last().state.behaviours
-				.Append(GenerateParameterDriver(Enumerable.Range(0, syncParameterNames.Length).Select(x => GenerateParameter(ChangeType.Copy, syncParameterNames[x], localSyncParameterNames[x])).ToArray())).ToArray();
-
+			
 			#endregion
 			
 			#region SyncTransitions
@@ -286,8 +381,10 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			for (int i = 0; i < localStates.Count/2; i++)
 			{
-				syncAnyStateTransitions.Add(GenerateTransition("",  conditions: Enumerable.Range(0, syncStepBools)
+				int o = i / syncSteps;
+				syncAnyStateTransitions.Add(GenerateTransition("",  conditions: Enumerable.Range(0, syncStepParameterCount)
 					.Select(x => GenerateCondition(syncStepPerms[(i) % (syncSteps)][x] ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, $"CustomObjectSync/Sync/Step{x}", 0))
+					.Concat(Enumerable.Range(0, objectParameterCount).Select(x => GenerateCondition(objectPerms[o][x] ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, $"CustomObjectSync/Sync/Object{x}", threshold: 0f)))
 					.Append(GenerateCondition(AnimatorConditionMode.If, "IsLocal", 0))
 					.Append(GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/Enabled", 0)).ToArray(), destinationState: localStates[i * 2].state));
 
@@ -299,8 +396,10 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			for (int i = 0; i < remoteStates.Count; i++)
 			{
-				syncAnyStateTransitions.Add(GenerateTransition("", canTransitionToSelf: true, conditions: Enumerable.Range(0, syncStepBools)
+				int o = i / syncSteps;
+				syncAnyStateTransitions.Add(GenerateTransition("", canTransitionToSelf: true, conditions: Enumerable.Range(0, syncStepParameterCount)
 					.Select(x => GenerateCondition(syncStepPerms[(i) % (syncSteps)][x] ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, $"CustomObjectSync/Sync/Step{x}", 0))
+					.Concat(Enumerable.Range(0, objectParameterCount).Select(x => GenerateCondition(objectPerms[o][x] ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, $"CustomObjectSync/Sync/Object{x}", threshold: 0f)))
 					.Append(GenerateCondition(AnimatorConditionMode.IfNot, "IsLocal", 0))
 					.Append(GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/Enabled", 0)).ToArray(), destinationState: remoteStates[i].state));
 			}
@@ -313,19 +412,22 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				syncParameters.Add(GenerateBoolParameter( $"CustomObjectSync/Sync/Data{i}", false));
 			}
-			for (int i = 0; i < syncStepBools; i++)
+			for (int i = 0; i < syncStepParameterCount; i++)
 			{
 				syncParameters.Add(GenerateBoolParameter( $"CustomObjectSync/Sync/Step{i}", syncStepPerms[syncSteps-1][i]));
+			}
+
+			for (int i = 0; i < objectParameterCount; i++)
+			{
+				syncParameters.Add(GenerateBoolParameter( $"CustomObjectSync/Sync/Object{i}", false));
+				syncParameters.Add(GenerateBoolParameter( $"CustomObjectSync/Temp/Object{i}", false));
+				syncParameters.Add(GenerateBoolParameter( $"CustomObjectSync/Object{i}", false));
 			}
 			mergedController.parameters = mergedController.parameters.Concat(syncParameters).ToArray();
 			#endregion
 			
-			syncMachine.states = localStates.Concat(remoteStates).Concat(new [] {initState }).ToArray();
+			syncMachine.states = localStates.Concat(remoteStates).Concat(new [] { initState }).ToArray();
 			syncMachine.defaultState = initState.state;
-			// 0 (read)
-			// 1 - syncSteps (Send)
-			// syncSteps (remotely, write)
-			
 			
 			#region VRCParameters
 			List<VRCExpressionParameters.Parameter> parameterList = new List<VRCExpressionParameters.Parameter>();
@@ -335,9 +437,14 @@ namespace VRLabs.CustomObjectSyncCreator
 				parameterList.Add(GenerateVRCParameter($"CustomObjectSync/Sync/Data{b}", VRCExpressionParameters.ValueType.Bool));
 			}
 
-			for (int b = 0; b < syncStepBools; b++)
+			for (int b = 0; b < syncStepParameterCount; b++)
 			{
 				parameterList.Add(GenerateVRCParameter($"CustomObjectSync/Sync/Step{b}", VRCExpressionParameters.ValueType.Bool, defaultValue:  syncStepPerms[syncSteps-1][b] ? 1 : 0));
+			}
+			
+			for (int b = 0; b < objectParameterCount; b++)
+			{
+				parameterList.Add(GenerateVRCParameter($"CustomObjectSync/Sync/Object{b}", VRCExpressionParameters.ValueType.Bool));
 			}
 
 			parameterObject.parameters = parameterObject.parameters.Concat(parameterList).ToArray();
@@ -359,15 +466,15 @@ namespace VRLabs.CustomObjectSyncCreator
 			#region Installation
 
 			GameObject rootObject = descriptor.gameObject;
-			GameObject syncSystem = GameObject.Instantiate(resourcePrefab, rootObject.transform);
+			GameObject syncSystem = Instantiate(resourcePrefab, rootObject.transform);
 			syncSystem.name = syncSystem.name.Replace("(Clone)", "");
 			if (!rotationEnabled)
 			{
-				GameObject.DestroyImmediate(syncSystem.transform.Find("Measure/Rotation").gameObject);
-				GameObject.DestroyImmediate(syncSystem.transform.Find("Set/Result").GetComponent<RotationConstraint>());
+				DestroyImmediate(syncSystem.transform.Find("Measure/Rotation").gameObject);
+				DestroyImmediate(syncSystem.transform.Find("Set/Result").GetComponent<RotationConstraint>());
 			}
 
-			foreach (string s in names)
+			foreach (string s in axis)
 			{
 				Transform sender = syncSystem.transform.Find($"Measure/Position/Sender{s}");
 				float radius = MathF.Pow(2, maxRadius);
@@ -381,38 +488,53 @@ namespace VRLabs.CustomObjectSyncCreator
 				sendConstraint.SetSource(1, source1);
 			}
 
-			Transform targetObject = syncSystem.transform.Find("Target");
-			targetObject.parent = syncObject.transform.parent;
-			targetObject.name = $"{syncObject.name}{" Target"}";
-			targetObject.localPosition = syncObject.transform.localPosition;
 
-			string oldPath = AnimationUtility.CalculateTransformPath(syncObject.transform, descriptor.transform);
-			syncObject.transform.parent = syncSystem.transform;
-			string newPath = AnimationUtility.CalculateTransformPath(syncObject.transform, descriptor.transform);
+
+			Transform mainTargetObject = syncSystem.transform.Find("Target");
+			ParentConstraint mainTargetParentConstraint = mainTargetObject.gameObject.AddComponent<ParentConstraint>();
+			mainTargetParentConstraint.locked = true;
+			mainTargetParentConstraint.constraintActive = true;
+			for (var i = 0; i < syncObjects.Length; i++)
+			{
+				GameObject targetSyncObject = syncObjects[i];
+				Transform targetObject = new GameObject($"{targetSyncObject.name} Target").transform;
+				targetObject.parent = targetSyncObject.transform.parent;
+				targetObject.localPosition = targetSyncObject.transform.localPosition;
+
+				mainTargetParentConstraint.AddSource(new ConstraintSource()
+				{
+					sourceTransform = targetObject,
+					weight = 0f
+				});
+
+				string oldPath = AnimationUtility.CalculateTransformPath(targetSyncObject.transform, descriptor.transform);
+				targetSyncObject.transform.parent = syncSystem.transform;
+				string newPath = AnimationUtility.CalculateTransformPath(targetSyncObject.transform, descriptor.transform);
 			
-			AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
-				.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
-				.ToArray();
-			AnimatorUtils.RenameClipPaths(allClips, false, oldPath, newPath);
+				AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
+					.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
+					.ToArray();
+				RenameClipPaths(allClips, false, oldPath, newPath);
 
-			ParentConstraint targetConstraint = syncObject.AddComponent<ParentConstraint>();
-			targetConstraint.AddSource(new ConstraintSource()
-			{
-				sourceTransform = targetObject, weight = 1
-			});
-			targetConstraint.AddSource(new ConstraintSource()
-			{
-				sourceTransform = syncSystem.transform.Find("Set/Result"), weight = 0f
-			});
-			if (addDampeningConstraint)
-			{
+				ParentConstraint targetConstraint = targetSyncObject.AddComponent<ParentConstraint>();
 				targetConstraint.AddSource(new ConstraintSource()
 				{
-					sourceTransform = syncObject.transform, weight = 0
+					sourceTransform = targetObject, weight = 1
 				});
+				targetConstraint.AddSource(new ConstraintSource()
+				{
+					sourceTransform = syncSystem.transform.Find("Set/Result"), weight = 0f
+				});
+				if (addDampeningConstraint)
+				{
+					targetConstraint.AddSource(new ConstraintSource()
+					{
+						sourceTransform = targetSyncObject.transform, weight = 0
+					});
+				}
+				targetConstraint.locked = true;
+				targetConstraint.constraintActive = true;	
 			}
-			targetConstraint.locked = true;
-			targetConstraint.constraintActive = true;
 
 			if (centeredOnAvatar)
 			{
@@ -453,28 +575,86 @@ namespace VRLabs.CustomObjectSyncCreator
 			#endregion
 
 			#region Result Displaying
-			AnimatorControllerLayer layer = mergedController.layers.FirstOrDefault(x => x.name == "CustomObjectSync/Parameter Initialization");
-			if (layer != null)
+			string[] targetStrings = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)).ToArray();
+
+			AnimationClip enableMeasure = GenerateClip("localMeasureEnabled");
+			AddCurve(enableMeasure, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 1));
+			
+			AnimationClip remoteParentConstraintOff = GenerateClip("remoteParentConstraintDisabled");
+			foreach (string targetString in targetStrings)
 			{
-				string targetString = AnimationUtility.CalculateTransformPath(syncObject.transform, descriptor.transform);
-				AnimatorState remoteOffState = layer.stateMachine.states.First(x => x.state.name == "Remote Off").state;
-				AnimationClip remoteParentConstraintOff = GenerateClip("remoteParentConstraintDisabled");
 				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
 				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
 				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[2].weight", AnimationCurve.Constant(0, 1/60f, 0));
-				remoteOffState.motion = remoteParentConstraintOff;
+			}
+			
+			ChildAnimatorState StateIdleRemote = GenerateChildState(new Vector3(30f, 180f, 0f), GenerateState("Idle/Remote"));
+			bool[][] axisPermutations = GeneratePermutations(3);
+			List<ChildAnimatorState> displayStates = new List<ChildAnimatorState>();
+			AnimationClip[] localConstraintTargetClips = Enumerable.Range(0, objectCount).Select(x =>
+			{
+				string targetString = AnimationUtility.CalculateTransformPath(syncSystem.transform, descriptor.transform) + "/Target";
+				AnimationClip localConstraintOn = GenerateClip($"localParentConstraintEnabled{x}");
+				Enumerable.Range(0, objectCount).ToList().ForEach(y=> AddCurve(localConstraintOn, targetString, typeof(ParentConstraint), $"m_Sources.Array.data[{y}].weight", AnimationCurve.Constant(0, 1 / 60f, x == y ? 1 : 0)));
+				return localConstraintOn;
+			}).ToArray();
 				
-				ChildAnimatorState[] localStatesInit = layer.stateMachine.states.Where(x => x.state.name.Contains("X")).ToArray();
-				AnimationClip enableMeasure = GenerateClip("localMeasureEnabled");
-				AddCurve(enableMeasure, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 1));
-				foreach (var childAnimatorState in localStatesInit)
+			for (var p = 0; p < axisPermutations.Length; p++)
+			{
+				bool[] perm = axisPermutations[p];
+
+				BlendTree localEnableTree = GenerateBlendTree("LocalSetTree", BlendTreeType.Direct);
+
+				Motion RecurseCreateTree(int depth, int index, int max)
 				{
-					childAnimatorState.state.motion = enableMeasure;
+					if (depth == 0)
+					{
+						return index >= localConstraintTargetClips.Length ? buffer : localConstraintTargetClips[index];
+					}
+					
+					BlendTree childTree = GenerateBlendTree($"TargetTree{depth}-{index}", BlendTreeType.Simple1D, blendParameter: $"CustomObjectSync/LocalReadBit{depth - 1}");
+					childTree.children = new[]
+					{
+						GenerateChildMotion(RecurseCreateTree(depth - 1, index * 2, max)),
+						GenerateChildMotion(RecurseCreateTree(depth - 1, index * 2 + 1, max))
+					};
+					return childTree;
 				}
 
-				AnimatorState remoteOnState = layer.stateMachine.states.First(x => x.state.name == "Remote On").state;
-				BlendTree remoteTree = GenerateBlendTree("RemoteTree", BlendTreeType.Direct);
-				AnimationClip remoteParentConstraintOn = GenerateClip("remoteParentConstraintEnabled");
+				Motion initialTargetTree = RecurseCreateTree(objectParameterCount, 0,(int)Math.Pow(2, objectParameterCount));
+				localEnableTree.children = new[]
+				{
+					GenerateChildMotion(enableMeasure, directBlendParameter: "CustomObjectSync/One"),
+					GenerateChildMotion(initialTargetTree, directBlendParameter: "CustomObjectSync/One")
+				};
+				
+				AnimatorState stateRot = GenerateState($"X{(perm[0] ? "+" : "-")}Y{(perm[1] ? "+" : "-")}Z{(perm[2] ? "+" : "-")}Rot", motion: localEnableTree, writeDefaultValues: true);
+				stateRot.behaviours = new StateMachineBehaviour[] {
+					GenerateParameterDriver(
+						Enumerable.Range(0, axis.Length).Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/AngleMag{axis[x]}_Angle", name: $"CustomObjectSync/Rotation{axis[x]}",
+								convertRange: true, destMax: perm[x] ? 1f : 0f, destMin: 0.5f, sourceMax: 1f) 
+							).Append(GenerateParameter(ChangeType.Set, name: "CustomObjectSync/SetStage", value: 1f)).ToArray())
+				};
+				displayStates.Add(GenerateChildState(new Vector3(-220f, -210f + 60 * p, 0f), stateRot));
+
+				AnimatorState statePos =  GenerateState($"X{(perm[0] ? "+" : "-")}Y{(perm[1] ? "+" : "-")}Z{(perm[2] ? "+" : "-")}Pos", motion: localEnableTree, writeDefaultValues: true);
+				statePos.behaviours = new StateMachineBehaviour[] {
+					GenerateParameterDriver(
+						Enumerable.Range(0, axis.Length).Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Position{axis[x]}{(perm[x] ? "Pos" : "Neg")}", name: $"CustomObjectSync/Position{axis[x]}",
+							convertRange: true, destMax: perm[x] ? 1f : 0f, destMin: 0.5f, sourceMax: 1f) 
+						).Append(GenerateParameter(ChangeType.Set, name: "CustomObjectSync/SetStage", value: 0f)).ToArray())
+				};
+				displayStates.Add(GenerateChildState(new Vector3(-470f, -210f + 60 * p, 0f), statePos));
+
+			}
+			
+			AnimatorState StateRemoteOff = GenerateState("Remote Off", motion: remoteParentConstraintOff);
+			List<ChildAnimatorState> remoteOnStates = new List<ChildAnimatorState>();
+			AnimationClip[] constraintsEnabled = Enumerable.Range(0, targetStrings.Length).Select(i =>
+			{
+				string targetString = targetStrings[i];
+				AnimationClip remoteParentConstraintOn = GenerateClip($"remoteParentConstraintEnabled{i}");
+				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 1));
 				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 0));
 				if (addDampeningConstraint)
 				{
@@ -485,8 +665,31 @@ namespace VRLabs.CustomObjectSyncCreator
 				{
 					AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
 				}
-
-
+				return remoteParentConstraintOn;
+			}).ToArray();
+			AnimationClip[] constraintsDisabled = Enumerable.Range(0, targetStrings.Length).Select(i =>
+			{
+				string targetString = targetStrings[i];
+				AnimationClip remoteParentConstraintOff = GenerateClip($"remoteParentConstraintDisabled{i}");
+				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 0));
+				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 0));
+				if (addDampeningConstraint)
+				{
+					AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
+					AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[2].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				}
+				else
+				{
+					AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				}
+				return remoteParentConstraintOff;
+			}).ToArray();
+			
+			for (int o = 0; o < objectCount; o++)
+			{
+				AnimatorState remoteOnState = GenerateState("Remote On", writeDefaultValues: true);
+				BlendTree remoteTree = GenerateBlendTree("RemoteTree", BlendTreeType.Direct);
+				
 				AnimationClip rotationXMin = GenerateClip("RotationXMin");
 				AddCurve(rotationXMin, "Custom Object Sync/Set/Result", typeof(RotationConstraint), "m_RotationOffset.x", AnimationCurve.Constant(0, 1/60f, -180));
 				AnimationClip rotationXMax = GenerateClip("RotationXMax");
@@ -568,16 +771,70 @@ namespace VRLabs.CustomObjectSyncCreator
 					GenerateChildMotion(rotationZTree, directBlendParameter: "CustomObjectSync/One"),
 					GenerateChildMotion(translationXTree, directBlendParameter: "CustomObjectSync/One"),
 					GenerateChildMotion(translationYTree, directBlendParameter: "CustomObjectSync/One"),
-					GenerateChildMotion(translationZTree, directBlendParameter: "CustomObjectSync/One"),
-					GenerateChildMotion(remoteParentConstraintOn, directBlendParameter: "CustomObjectSync/One")
+					GenerateChildMotion(translationZTree, directBlendParameter: "CustomObjectSync/One")
 				};
+				remoteTree.children = remoteTree.children.Concat(Enumerable.Range(0, objectCount).Select(o2 => GenerateChildMotion(o2 == o ? constraintsEnabled[o2] : constraintsDisabled[o2], directBlendParameter: "CustomObjectSync/One"))).ToArray();
 				
-				remoteOnState.motion = remoteTree;
-
+				remoteOnState.motion = remoteTree;	
+				displayStates.Add(GenerateChildState(new Vector3(260f, -60f * (o + 1), 0f), remoteOnState));
+				remoteOnStates.Add(displayStates.Last());
 			}
+
+			displayStates.Add(GenerateChildState(new Vector3(260f, 0, 0f), StateRemoteOff));
+			
+			AnimatorStateMachine displayStateMachine = GenerateStateMachine("CustomObjectSync/Parameter Setup and Display", new Vector3(50f, 20f, 0f), new Vector3(50f, 120f, 0f), new Vector3(800f, 120f, 0f), states: displayStates.ToArray(), defaultState: StateIdleRemote.state);
+
+			List<AnimatorStateTransition> anyStateTransitions = new List<AnimatorStateTransition>();
+			anyStateTransitions.Add(GenerateTransition("", conditions:
+				new AnimatorCondition[]
+				{
+					GenerateCondition(AnimatorConditionMode.IfNot, "IsLocal", 0f),
+					GenerateCondition(AnimatorConditionMode.IfNot, "CustomObjectSync/Enabled", 0f)
+				}, destinationState: StateRemoteOff));
+			
+			for (var o = 0; o < remoteOnStates.Count; o++)
+			{
+				anyStateTransitions.Add(GenerateTransition("", conditions:
+					Enumerable.Range(0, objectParameterCount).Select(x => GenerateCondition(objectPerms[o][x] ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, $"CustomObjectSync/Object{x}", threshold: 0))
+						.Append(GenerateCondition(AnimatorConditionMode.IfNot, "IsLocal", 0f))
+						.Append(GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/Enabled", 0f)).ToArray()
+						, destinationState: remoteOnStates[o].state));
+			}
+
+			
+			for (int p = 0; p < axisPermutations.Length; p++)
+			{
+				bool[] perm = axisPermutations[p];
+				anyStateTransitions.Add(
+					GenerateTransition("", canTransitionToSelf: true, conditions:
+						Enumerable.Range(0, axis.Length).Select(x =>
+								GenerateCondition(perm[x] ? AnimatorConditionMode.Less : AnimatorConditionMode.Greater,
+									$"CustomObjectSync/AngleSign{axis[x]}_Angle", perm[x] ? 0.5000001f : 0.5f))
+							.Append(GenerateCondition(AnimatorConditionMode.If, "IsLocal", 0f))
+							.Append(GenerateCondition(AnimatorConditionMode.IfNot, "CustomObjectSync/SetStage", 0f)).ToArray()
+						, destinationState: displayStates[2 * p].state)
+					);
+				anyStateTransitions.Add(
+					GenerateTransition("", canTransitionToSelf: true, conditions:
+						Enumerable.Range(0, axis.Length).SelectMany(x => new []
+						{
+							GenerateCondition(AnimatorConditionMode.Greater,
+								$"CustomObjectSync/Position{axis[x]}{(perm[x] ? "Pos" : "Neg")}", -0.000001f),
+							GenerateCondition(AnimatorConditionMode.Less,
+								$"CustomObjectSync/Position{axis[x]}{(!perm[x] ? "Pos" : "Neg")}", 0.000001f),
+						})
+							.Append(GenerateCondition(AnimatorConditionMode.If, "IsLocal", 0f))
+							.Append(GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/SetStage", 0f)).ToArray()
+						, destinationState: displayStates[2 * p + 1].state)
+				);
+			}
+
+			displayStateMachine.anyStateTransitions = anyStateTransitions.ToArray();
+			
+			AnimatorControllerLayer displayLayer = GenerateLayer("CustomObjectSync/Parameter Setup and Display", displayStateMachine);
 			#endregion
 			
-			mergedController.layers = mergedController.layers.Append(syncLayer).ToArray();
+			mergedController.layers = mergedController.layers.Append(syncLayer).Append(displayLayer).ToArray();
 			foreach (AnimatorState state in mergedController.layers.Where(x => x.name.Contains("CustomObjectSync")).SelectMany(x => x.stateMachine.states).Select(x => x.state))
 			{
 				if (state.motion is null)
@@ -587,7 +844,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			}
 			SerializeController(mergedController);
 			
-			Directory.CreateDirectory(AnimatorUtils.STANDARD_NEW_ANIMATION_FOLDER);
+			Directory.CreateDirectory(STANDARD_NEW_ANIMATION_FOLDER);
 			foreach (var clip in mergedController.animationClips)
 			{
 				if (!AssetDatabase.IsMainAsset(clip)){
@@ -595,7 +852,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					{
 						clip.name = "Anim";
 					}
-					var uniqueFileName = AssetDatabase.GenerateUniqueAssetPath($"{AnimatorUtils.STANDARD_NEW_ANIMATION_FOLDER}{clip.name}.anim");
+					var uniqueFileName = AssetDatabase.GenerateUniqueAssetPath($"{STANDARD_NEW_ANIMATION_FOLDER}{clip.name}.anim");
 					AssetDatabase.CreateAsset(clip, uniqueFileName);
 				}
 			}
@@ -603,36 +860,38 @@ namespace VRLabs.CustomObjectSyncCreator
 			EditorUtility.DisplayDialog("Success!", "Custom Object Sync has been successfully installed", "Ok");
 		}
 
-		private void SetupAnimationControllerCopy(string name, AnimationClip buffer, ChildAnimatorState initialState,
-			AnimatorStateMachine machine, int bits, bool read, bool copyBoth)
+		private void SetupAnimationControllerCopy(string name, int o, AnimationClip buffer, ChildAnimatorState initialState,
+			AnimatorStateMachine machine, int bits, int objectBits, bool read, bool copyBoth)
 		{
-
 			bool[][] permutations = GeneratePermutations(3);
-
+			bool[][] objectPermutations = GeneratePermutations(objectBits);
+			
 			int multiplier = read ? -1 : 1;
 			string mode = read ? "Read" : "Write";
 			
 			#region states
 			ChildAnimatorState startState = GenerateChildState(new Vector3((-100) + multiplier * 300, 200, 0), GenerateState($"Start{mode}", motion: buffer));
 			ChildAnimatorState endState = GenerateChildState(new Vector3((-100) + multiplier * 300 * (bits + 2) , 200, 0), GenerateState($"End{mode}", motion: buffer));
+			
 			startState.state.behaviours = new[]
 			{
 				read 
-					? GenerateParameterDriver(names.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/{name}{x}", name: $"CustomObjectSync/Temp/{name}{x}")).ToArray())
-					: GenerateParameterDriver(names.Select(x => GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Temp/{name}{x}", value: 0)).ToArray())
+					? GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/{name}{x}", name: $"CustomObjectSync/Temp/{name}{x}/{o}")).ToArray())
+					: GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Temp/{name}{x}/{o}", value: 0)).ToArray())
 			};
 			
 			endState.state.behaviours = new[]
 			{
-				GenerateParameterDriver(new[] { GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Start{mode}", value: 0) })
+				GenerateParameterDriver(new[] { GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Start{mode}/{o}", value: 0) })
 			};
 			
 			if (!read && copyBoth)
 			{
-				endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(names.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Position{x}", name: $"CustomObjectSync/Position{x}")).ToArray())).ToArray();
-				endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(names.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Rotation{x}", name: $"CustomObjectSync/Rotation{x}")).ToArray())).ToArray();
+				endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Position{x}/{o}", name: $"CustomObjectSync/Position{x}")).ToArray())).ToArray();
+				endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Rotation{x}/{o}", name: $"CustomObjectSync/Rotation{x}")).ToArray())).ToArray();
+				startState.state.behaviours = startState.state.behaviours.Append(GenerateParameterDriver(Enumerable.Range(0 ,objectBits).Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Sync/Object{x}", name: $"CustomObjectSync/Temp/Object{x}")).ToArray())).ToArray();
+				endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(Enumerable.Range(0 ,objectBits).Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Object{x}", name: $"CustomObjectSync/Object{x}")).ToArray())).ToArray();
 			}
-			
 
 			List<List<ChildAnimatorState>> bitStates = new List<List<ChildAnimatorState>>();
 			for (int b = 0; b < bits; b++)
@@ -652,19 +911,19 @@ namespace VRLabs.CustomObjectSyncCreator
 						{
 							if (perm[p])
 							{
-								parameterDriverParams.Add(GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Bits/{name}{names[p]}{b}", value: 1));
-								parameterDriverParams.Add(GenerateParameter(ChangeType.Add, name: $"CustomObjectSync/Temp/{name}{names[p]}", value: -1 * Mathf.Pow(0.5f, b + 1)));
+								parameterDriverParams.Add(GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Bits/{name}{axis[p]}{b}/{o}", value: 1));
+								parameterDriverParams.Add(GenerateParameter(ChangeType.Add, name: $"CustomObjectSync/Temp/{name}{axis[p]}/{o}", value: -1 * Mathf.Pow(0.5f, b + 1)));
 							}
 							else
 							{
-								parameterDriverParams.Add(GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Bits/{name}{names[p]}{b}", value: 0));
+								parameterDriverParams.Add(GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Bits/{name}{axis[p]}{b}/{o}", value: 0));
 							}
 						}
 						else
 						{
 							if (perm[p])
 							{
-								parameterDriverParams.Add(GenerateParameter(ChangeType.Add, name: $"CustomObjectSync/Temp/{name}{names[p]}", value: 1 * Mathf.Pow(0.5f, b + 1)));
+								parameterDriverParams.Add(GenerateParameter(ChangeType.Add, name: $"CustomObjectSync/Temp/{name}{axis[p]}/{o}", value: 1 * Mathf.Pow(0.5f, b + 1)));
 							}
 						}
 					}
@@ -680,9 +939,15 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			#region transitions
 
-			initialState.state.transitions = initialState.state.transitions.Append(GenerateTransition("", destinationState: startState.state, conditions: new []{ GenerateCondition(AnimatorConditionMode.If, $"CustomObjectSync/Start{mode}", 0), GenerateCondition( read ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, "IsLocal", 0)})).ToArray();
+			initialState.state.transitions = initialState.state.transitions
+				.Append(
+					GenerateTransition("", destinationState: startState.state, conditions: 
+						Enumerable.Range(0, objectBits).Select(x => GenerateCondition(objectPermutations[o][x] ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, $"CustomObjectSync/Sync/Object{x}", threshold: 0f))
+						.Append(GenerateCondition(AnimatorConditionMode.If, $"CustomObjectSync/Start{mode}/{o}", 0))
+						.Append(GenerateCondition( read ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, "IsLocal", 0)).ToArray())
+					).ToArray();
 			
-			startState.state.transitions = bitStates[0].Select((x, index) => GenerateBitTransition(permutations[index], 0, name, x.state, read)).ToArray();
+			startState.state.transitions = bitStates[0].Select((x, index) => GenerateBitTransition(permutations[index], 0, o, name, x.state, read)).ToArray();
 
 			for (var i = 0; i < bitStates.Count; i++)
 			{
@@ -703,7 +968,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					AnimatorStateTransition[] transitions = new AnimatorStateTransition[bitStates[i + 1].Count];
 					for (int s2 = 0; s2 < bitStates[i+1].Count; s2++)
 					{
-						transitions[s2] = GenerateBitTransition(permutations[s2], i + 1, name, bitStates[i + 1][s2].state, read);
+						transitions[s2] = GenerateBitTransition(permutations[s2], i + 1, o, name, bitStates[i + 1][s2].state, read);
 					}
 					bitStates[i][s1].state.transitions = transitions;
 				}
@@ -718,7 +983,7 @@ namespace VRLabs.CustomObjectSyncCreator
 
 		public void Remove()
 		{
-			VRCAvatarDescriptor descriptor = syncObject.GetComponentInParent<VRCAvatarDescriptor>();
+			VRCAvatarDescriptor descriptor = syncObjects.Select(x => x.GetComponentInParent<VRCAvatarDescriptor>()).FirstOrDefault();
 			
 			if (descriptor == null) return;
 
@@ -745,17 +1010,17 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				AnimatorController controller = ((AnimatorController)descriptor.baseAnimationLayers
 					.FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController);
-				string[] layerNames = new[] {"CustomObjectSync/Parameter Initialization", "CustomObjectSync/Position Bit Convert" , "CustomObjectSync/Rotation Bit Convert", "CustomObjectSync/Sync" };
-				controller.layers = controller.layers.Where(x => !layerNames.Contains(x.name)).ToArray();
+				string[] layerNames = new[] {"CustomObjectSync/Parameter Setup and Display", "CustomObjectSync/Position Bit Convert" , "CustomObjectSync/Rotation Bit Convert", "CustomObjectSync/Sync" };
+				controller.layers = controller.layers.Where(x => layerNames.All(y => !x.name.Contains(y))).ToArray();
 				controller.parameters = controller.parameters.Where(x => !x.name.Contains("CustomObjectSync/")).ToArray();
 			}
 			
 			if (descriptor.transform.Find("Custom Object Sync"))
 			{
 				Transform prefab = descriptor.transform.Find("Custom Object Sync");
-				Transform userObj = Enumerable.Range(0, prefab.childCount)
-					.Select(x => prefab.GetChild(x)).FirstOrDefault(x => x.name != "Set" && x.name != "Measure");
-				if (userObj != null)
+				Transform[] userObjects = Enumerable.Range(0, prefab.childCount)
+					.Select(x => prefab.GetChild(x)).Where(x => x.name != "Set" && x.name != "Measure" && x.name != "Target").ToArray();
+				foreach (Transform userObj in userObjects)
 				{
 					ParentConstraint parentConstraint = userObj.GetComponent<ParentConstraint>();
 					if (parentConstraint != null)
@@ -772,10 +1037,10 @@ namespace VRLabs.CustomObjectSyncCreator
 							AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
 								.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
 								.ToArray();
-							AnimatorUtils.RenameClipPaths(allClips, false, oldPath, newPath);
+							RenameClipPaths(allClips, false, oldPath, newPath);
 						}
 
-						GameObject.DestroyImmediate(target.gameObject);
+						DestroyImmediate(target.gameObject);
 					}
 				}
 				Transform result = prefab.Find("Set/Result");
@@ -789,10 +1054,10 @@ namespace VRLabs.CustomObjectSyncCreator
 							         return sources.Any(y => y.sourceTransform == result);
 						         }).ToArray())
 					{
-						GameObject.DestroyImmediate(positionConstraint);
+						DestroyImmediate(positionConstraint);
 					}
 				}
-				GameObject.DestroyImmediate(prefab.gameObject);
+				DestroyImmediate(prefab.gameObject);
 			}
 			
 			EditorUtility.DisplayDialog("Success!", "Custom Object Sync has been successfully removed", "Ok");
@@ -809,13 +1074,10 @@ namespace VRLabs.CustomObjectSyncCreator
 		public int GetStepCount(int bits = -1)
 		{
 			bits = bits == -1 ? bitCount : bits;
-			var maxbitCount = GetMaxBitCount();
-			int objectCount = useMultipleObjects ? syncObjects.Count(x => x != null): 1;
-			int syncSteps = Mathf.CeilToInt(maxbitCount / (float)bits) * objectCount;
-			return syncSteps;
+			return  Mathf.CeilToInt(GetMaxBitCount() / (float)bits);
 		}
 
-		public AnimatorStateTransition GenerateBitTransition(bool[] values, int index, string parameterName, AnimatorState destinationState, bool read)
+		public AnimatorStateTransition GenerateBitTransition(bool[] values, int index, int objectIndex, string parameterName, AnimatorState destinationState, bool read)
 		{
 			AnimatorStateTransition transition = null;
 			if (read)
@@ -824,7 +1086,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					GenerateTransition("", destinationState: destinationState, conditions: Enumerable.Range(0, values.Length).Select(i =>
 						GenerateCondition(
 							values[i] ? AnimatorConditionMode.Greater : AnimatorConditionMode.Less, 
-							$"CustomObjectSync/Temp/{parameterName}{names[i]}" , 
+							$"CustomObjectSync/Temp/{parameterName}{axis[i]}/{objectIndex}" , 
 							Mathf.Pow(0.5f, index + 1) * (values[i] ? 0.9999f : 1.0001f))
 					).ToArray());
 			}
@@ -834,7 +1096,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					GenerateTransition("", destinationState: destinationState, conditions: Enumerable.Range(0, values.Length).Select(i =>
 						GenerateCondition(
 							values[i] ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, 
-							$"CustomObjectSync/Bits/{parameterName}{names[i]}{index}" , 
+							$"CustomObjectSync/Bits/{parameterName}{axis[i]}{index}/{objectIndex}" , 
 							0)
 						).ToArray());
 			}
@@ -844,6 +1106,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			return transition;
 		}
 		
+		
 		bool[][] GeneratePermutations(int size)
 		{
 			return Enumerable.Range(0, (int)Math.Pow(2, size)).Select(i => Enumerable.Range(0, size).Select(b => ((i & (1 << b)) > 0)).ToArray()).ToArray();
@@ -851,22 +1114,66 @@ namespace VRLabs.CustomObjectSyncCreator
 
 		public bool ObjectPredicate(Func<GameObject, bool> predicate, bool any = true, bool ignoreNulls = true)
 		{
-			if (useMultipleObjects)
-			{
-				if (any)
-				{
-					return syncObjects.Where(x => !ignoreNulls || x != null).Any(predicate); 
-				}
-				else
-				{
-					return syncObjects.Where(x => !ignoreNulls || x != null).All(predicate);
-				}
-			}
-			else
-			{
-				return predicate(syncObject);
-			}
+			return any ? syncObjects.Where(x => !ignoreNulls || x != null).Any(predicate) : syncObjects.Where(x => !ignoreNulls || x != null).All(predicate);
 		}
+		
+        public static void RenameClipPaths(AnimationClip[] clips, bool replaceEntire, string oldPath, string newPath)
+        {
+            try
+            {
+                AssetDatabase.StartAssetEditing();
+
+                foreach (AnimationClip clip in clips)
+                {
+                    EditorCurveBinding[] floatCurves = AnimationUtility.GetCurveBindings(clip);
+                    EditorCurveBinding[] objectCurves = AnimationUtility.GetObjectReferenceCurveBindings(clip);
+
+                    foreach (EditorCurveBinding binding in floatCurves) ChangeBindings(binding, false);
+                    foreach (EditorCurveBinding binding in objectCurves) ChangeBindings(binding, true);
+
+                    void ChangeBindings(EditorCurveBinding binding, bool isObjectCurve)
+                    {
+                        if (isObjectCurve)
+                        {
+                            ObjectReferenceKeyframe[] objectCurve = AnimationUtility.GetObjectReferenceCurve(clip, binding);
+
+                            if (!replaceEntire && binding.path.Contains(oldPath))
+                            {
+                                AnimationUtility.SetObjectReferenceCurve(clip, binding, null);
+                                binding.path = binding.path.Replace(oldPath, newPath);
+                                AnimationUtility.SetObjectReferenceCurve(clip, binding, objectCurve);
+                            }
+
+                            if (replaceEntire && binding.path == oldPath)
+                            {
+                                AnimationUtility.SetObjectReferenceCurve(clip, binding, null);
+                                binding.path = newPath;
+                                AnimationUtility.SetObjectReferenceCurve(clip, binding, objectCurve);
+                            }
+                        }
+                        else
+                        {
+                            AnimationCurve floatCurve = AnimationUtility.GetEditorCurve(clip, binding);
+
+                            if (!replaceEntire && binding.path.Contains(oldPath))
+                            {
+                                AnimationUtility.SetEditorCurve(clip, binding, null);
+                                binding.path = binding.path.Replace(oldPath, newPath);
+                                AnimationUtility.SetEditorCurve(clip, binding, floatCurve);
+                            }
+
+                            if (replaceEntire && binding.path == oldPath)
+                            {
+                                AnimationUtility.SetEditorCurve(clip, binding, null);
+                                binding.path = newPath;
+                                AnimationUtility.SetEditorCurve(clip, binding, floatCurve);
+                            }
+                        }
+                    }
+                }
+            }
+            finally { AssetDatabase.StopAssetEditing();  }
+        }
 		
 	}
 }
