@@ -27,9 +27,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			creator = CustomObjectSyncCreator.Instance;
 		}
 		
-		private void OnGUI()
-		{
-			creator.resourceController ??= AssetDatabase.LoadAssetAtPath<AnimatorController>("Assets/VRLabs/CustomObjectSync/Custom Object Sync.controller");
+			creator.resourceController ??= AssetDatabase.LoadAssetAtPath<AnimatorController>("Assets/VRLabs/CustomObjectSync/Resources/Custom Object Sync.controller");
 			creator.resourceController ??= AssetDatabase.LoadAssetAtPath<AnimatorController>(AssetDatabase.GUIDToAssetPath("6a164efbb993fd047a252ee32da1039b") ?? "");
 			
 			if (creator.resourceController == null)
@@ -38,7 +36,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				return;
 			}
 			
-			creator.resourcePrefab ??= AssetDatabase.LoadAssetAtPath<GameObject>("Assets/VRLabs/CustomObjectSync/Custom Object Sync.prefab");
+			creator.resourcePrefab ??= AssetDatabase.LoadAssetAtPath<GameObject>("Assets/VRLabs/CustomObjectSync/Resources/Custom Object Sync.prefab");
 			creator.resourcePrefab ??= AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath("d51eb264fa89a5b4d9b95f344f169766") ?? "");
 
 			
