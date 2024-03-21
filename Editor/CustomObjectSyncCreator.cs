@@ -595,7 +595,9 @@ namespace VRLabs.CustomObjectSyncCreator
 			AnimationClip enableMeasure = GenerateClip("localMeasureEnabled");
 			AddCurve(enableMeasure, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 1));
 			
+			
 			AnimationClip remoteParentConstraintOff = GenerateClip("remoteParentConstraintDisabled");
+			AddCurve(remoteParentConstraintOff, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 0));
 			foreach (string targetString in targetStrings)
 			{
 				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
@@ -607,9 +609,6 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				AddCurve(disableDamping, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
 				AddCurve(disableDamping, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
-				
-				AddCurve(remoteParentConstraintOff, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
-				AddCurve(remoteParentConstraintOff, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
 			}
 			
 			ChildAnimatorState StateIdleRemote = GenerateChildState(new Vector3(30f, 180f, 0f), GenerateState("Idle/Remote"));
@@ -679,6 +678,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				string targetString = targetStrings[i];
 				AnimationClip remoteParentConstraintOn = GenerateClip($"remoteParentConstraintEnabled{i}");
+				AddCurve(remoteParentConstraintOn, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 0));
 				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 1));
 				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 0));
 				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
