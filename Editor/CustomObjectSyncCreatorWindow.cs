@@ -29,9 +29,15 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				creator = CustomObjectSyncCreator.instance;
 			}
-			
-			creator.resourcePrefab ??= AssetDatabase.LoadAssetAtPath<GameObject>("Assets/VRLabs/CustomObjectSync/Resources/Custom Object Sync.prefab");
-			creator.resourcePrefab ??= AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath("d51eb264fa89a5b4d9b95f344f169766") ?? "");
+
+			if (creator.resourcePrefab == null)
+			{
+				creator.resourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/VRLabs/CustomObjectSync/Resources/Custom Object Sync.prefab");
+			}
+			if (creator.resourcePrefab == null)
+			{
+				creator.resourcePrefab =  AssetDatabase.LoadAssetAtPath<GameObject>(AssetDatabase.GUIDToAssetPath("d51eb264fa89a5b4d9b95f344f169766") ?? "");
+			}
 
 			
 			if (creator.resourcePrefab == null)
@@ -67,7 +73,11 @@ namespace VRLabs.CustomObjectSyncCreator
 					creator.syncObject = (GameObject)ObjectField("Object To Sync", creator.syncObject, typeof(GameObject), true);
 				}	
 				GUILayout.Space(2);
-				creator.useMultipleObjects = GUILayout.Toggle(creator.useMultipleObjects, "Sync Multiple Objects");
+				using (new GUILayout.HorizontalScope())
+				{
+					creator.useMultipleObjects = GUILayout.Toggle(creator.useMultipleObjects, "Sync Multiple Objects");
+					creator.quickSync = GUILayout.Toggle(creator.quickSync, new GUIContent("Quick Sync", "This will lower customizability but increase sync times by using 1 float per variable."));
+				}
 			} 
 
 			if (!creator.ObjectPredicate(x => x != null))
@@ -141,8 +151,77 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			GUILayout.Space(2);
 
+			if (creator.quickSync)
+			{
+				DisplayQuickSyncGUI();
+			}
+			else
+			{
+				DisplayBitwiseGUI();
+			}
+
+			GUILayout.Space(2);
+			
+			if (GUILayout.Button("Generate Custom Sync"))
+			{
+				creator.Generate();
+			}
+		}
+
+		private void DisplayQuickSyncGUI()
+		{
+			creator.maxRadius = 8 - creator.positionPrecision;
+			creator.centeredOnAvatar = true;
+			creator.rotationPrecision = 8;
+			
 			string positionString = $"Position Precision: {FloatToStringConverter.Convert((float)Math.Pow(0.5, creator.positionPrecision) * 100)}cm";
-			creator.positionPrecision = DisplayInt(positionString,  creator.positionPrecision, 1, 16);
+			creator.positionPrecision = DisplayInt(positionString,  creator.positionPrecision, 1, 8);
+
+			GUILayout.Space(2);
+			using (new HorizontalScope(GUI.skin.box))
+			{
+				GUILayout.Label($"Radius: {Math.Pow(2, 8 - creator.positionPrecision)}m");
+			}
+
+
+			GUILayout.Space(2);
+			
+			int objectCount = creator.useMultipleObjects ? creator.syncObjects.Count(x => x != null): 1;
+
+			using (new HorizontalScope(GUI.skin.box))
+			{
+				creator.rotationEnabled = GUILayout.Toggle(creator.rotationEnabled, "Enable Rotation Sync");
+			}
+
+			GUILayout.Space(2);
+
+			using (new HorizontalScope(GUI.skin.box))
+			{
+				creator.addDampeningConstraint = GUILayout.Toggle(creator.addDampeningConstraint, "Add Damping Constraint to Object");
+				if (creator.addDampeningConstraint)
+				{
+					GUILayout.Space(5);
+					creator.dampingConstraintValue = EditorGUILayout.Slider("Damping Value", creator.dampingConstraintValue, 0, 1);
+				}
+			}
+
+			GUILayout.Space(2);
+
+			int objectParameterCount = Mathf.CeilToInt(Mathf.Log(objectCount, 2));
+			GUI.contentColor = Color.white;
+
+			using (new HorizontalScope(GUI.skin.box))
+			{
+				GUILayout.FlexibleSpace();
+				int bitUsage = creator.GetMaxBitCount();
+				GUILayout.Label($"Parameter Usage: {objectParameterCount + bitUsage + 1}, Time per Sync: {(objectCount * (1/5f)), 4:F3}s", new  [] { GUILayout.ExpandWidth(true) });
+				GUILayout.FlexibleSpace();
+			}
+		}
+		private void DisplayBitwiseGUI()
+		{
+			string positionString = $"Position Precision: {FloatToStringConverter.Convert((float)Math.Pow(0.5, creator.positionPrecision - 1) * 100)}cm";
+			creator.positionPrecision = DisplayInt(positionString,  creator.positionPrecision, 2, 16);
 
 			GUILayout.Space(2);
 
@@ -224,19 +303,12 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				GUILayout.FlexibleSpace();
 				float conversionTime = (Math.Max(creator.rotationPrecision, creator.maxRadius + creator.positionPrecision)) * 1.5f / 60f;
-                float timeBetweenSyncs = objectCount * syncSteps * (1/5f);
+				float timeBetweenSyncs = objectCount * syncSteps * (1/5f);
 				GUILayout.Label($"Sync Steps: {syncSteps}, Parameter Usage: {objectParameterCount + parameterCount + creator.bitCount + 1}, Time per Sync: {(timeBetweenSyncs + conversionTime), 4:F3}s", new  [] { GUILayout.ExpandWidth(true) });
 				GUILayout.FlexibleSpace();
 			}
-
-			GUILayout.Space(2);
-			
-			if (GUILayout.Button("Generate Custom Sync"))
-			{
-				creator.Generate();
-			}
 		}
-		
+
 		public int DisplayInt(string s, int value, int lowerBound, int uppterbound)
 		{
 			using (new HorizontalScope(GUI.skin.box))
