@@ -309,8 +309,9 @@ namespace VRLabs.CustomObjectSyncCreator
 			}
 		}
 
-		public int DisplayInt(string s, int value, int lowerBound, int uppterbound)
+		public int DisplayInt(string s, int value, int lowerBound, int upperbound)
 		{
+			value = Math.Clamp(value, lowerBound, upperbound);
 			using (new HorizontalScope(GUI.skin.box))
 			{
 				GUILayout.Label(s, new GUILayoutOption[]{ GUILayout.MaxWidth(360)});
@@ -319,7 +320,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					value--;
 				}
 
-				if (GUILayout.Button(EditorGUIUtility.IconContent("d_Toolbar Plus")) && value != uppterbound)
+				if (GUILayout.Button(EditorGUIUtility.IconContent("d_Toolbar Plus")) && value != upperbound)
 				{
 					value++;
 				}
