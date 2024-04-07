@@ -730,11 +730,13 @@ namespace VRLabs.CustomObjectSyncCreator
 				containerConstraint.locked = true;
 				containerConstraint.constraintActive = true;	
 			}
-
+			Transform setTransform = syncSystem.transform.Find("Set");
+			Transform measureTransform = syncSystem.transform.Find("Measure");
+			float offset = -Mathf.Pow(2, maxRadius) / 10f;
+			setTransform.localPosition = new Vector3(offset, offset, offset);
+			measureTransform.localPosition = new Vector3(offset, offset, offset);
 			if (centeredOnAvatar)
 			{
-				Transform setTransform = syncSystem.transform.Find("Set");
-				Transform measureTransform = syncSystem.transform.Find("Measure");
 				PositionConstraint setConstraint = setTransform.gameObject.AddComponent<PositionConstraint>();
 				PositionConstraint measureConstraint = measureTransform.gameObject.AddComponent<PositionConstraint>();
 				setConstraint.AddSource(new ConstraintSource()
