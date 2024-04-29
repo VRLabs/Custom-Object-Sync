@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -1255,7 +1255,48 @@ namespace VRLabs.CustomObjectSyncCreator
 				AnimatorController controller = ((AnimatorController)descriptor.baseAnimationLayers
 					.FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController);
 				string[] layerNames = new[] {"CustomObjectSync/Parameter Setup and Display", "CustomObjectSync/Position Bit Convert" , "CustomObjectSync/Rotation Bit Convert", "CustomObjectSync/Sync" };
-				controller.layers = controller.layers.Where(x => layerNames.All(y => !x.name.Contains(y))).ToArray();
+				AnimatorControllerLayer[] layersToDelete = controller.layers.Where(x => x.name.StartsWith("CustomObjectSync/")).ToArray();
+				List<Object> usedAssets = new List<Object>();
+				
+				static void AddToAssetsListStateMachineRecursive(List<UnityEngine.Object> usedAssets, AnimatorStateMachine sm) {
+					usedAssets.Add(sm);
+					foreach (var behaviour in sm.behaviours) usedAssets.Add(behaviour);
+					foreach (var transition in sm.anyStateTransitions) usedAssets.Add(transition);
+					foreach (var transition in sm.entryTransitions) usedAssets.Add(transition);
+					foreach (var state in sm.states) {
+						usedAssets.Add(state.state);
+						foreach (var behaviour in state.state.behaviours) usedAssets.Add(behaviour);
+						foreach (var transition in state.state.transitions) usedAssets.Add(transition);
+						if (state.state.motion is BlendTree) {
+							usedAssets.Add(state.state.motion);
+							var bt = state.state.motion as BlendTree;
+							var stack = new Stack<BlendTree>();
+							stack.Push(bt);
+							while (stack.Count > 0) {
+								var current = stack.Pop();
+								foreach (var child in current.children) {
+									if (child.motion is BlendTree)
+									{
+										usedAssets.Add(child.motion);
+										stack.Push(child.motion as BlendTree);
+									}
+								}
+							}
+						}
+					}
+					foreach (var state_machine in sm.stateMachines) AddToAssetsListStateMachineRecursive(usedAssets, state_machine.stateMachine);
+				}
+				
+				foreach (var animatorControllerLayer in layersToDelete)
+				{
+					AddToAssetsListStateMachineRecursive(usedAssets, animatorControllerLayer.stateMachine);
+				}
+				foreach (Object usedAsset in usedAssets)
+				{
+					AssetDatabase.RemoveObjectFromAsset(usedAsset);
+				}
+				
+				controller.layers = controller.layers.Where(x => layerNames.All(y => !x.name.StartsWith("CustomObjectSync/"))).ToArray();
 				controller.parameters = controller.parameters.Where(x => !x.name.Contains("CustomObjectSync/")).ToArray();
 			}
 			
