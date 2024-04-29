@@ -311,7 +311,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				GUILayout.FlexibleSpace();
 				float conversionTime = (Math.Max(creator.rotationPrecision, creator.maxRadius + creator.positionPrecision)) * 1.5f / 60f;
 				float timeBetweenSyncs = objectCount * syncSteps * (1/5f);
-				GUILayout.Label($"Sync Steps: {syncSteps}, Parameter Usage: {objectParameterCount + parameterCount + creator.bitCount + 1}, Time per Sync: {(timeBetweenSyncs + conversionTime), 4:F3}s", new  [] { GUILayout.ExpandWidth(true) });
+				GUILayout.Label($"Sync Steps: {syncSteps}, Parameter Usage: {objectParameterCount + parameterCount + creator.bitCount + 1}, Sync Rate: {(timeBetweenSyncs), 4:F3}s, Sync Delay: {(timeBetweenSyncs + (2 * conversionTime)), 4:F3}s", new  [] { GUILayout.ExpandWidth(true) });
 				GUILayout.FlexibleSpace();
 			}
 		}
