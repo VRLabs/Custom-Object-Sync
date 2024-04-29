@@ -305,6 +305,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
 				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
+				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1 / 60f, 1));
 			}
 			
 			AnimationClip disableDamping = GenerateClip("localDisableDamping");
