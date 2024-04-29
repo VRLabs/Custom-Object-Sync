@@ -704,11 +704,11 @@ namespace VRLabs.CustomObjectSyncCreator
 					targetConstraint.constraintActive = true;
 					targetConstraint.AddSource(new ConstraintSource()
 					{
-						sourceTransform = damping.transform, weight = dampingConstraintValue
+						sourceTransform = damping.transform, weight = 1
 					});
 					targetConstraint.AddSource(new ConstraintSource()
 					{
-						sourceTransform = targetSyncObject.transform, weight = 1f
+						sourceTransform = targetSyncObject.transform, weight = 0f
 					});
 				}
 				
@@ -758,7 +758,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					sourceTransform = descriptor.transform, weight = 1f
 				});
 				setConstraint.translationAtRest = Vector3.zero;
-				setConstraint.translationOffset = Vector3.zero;
+				setConstraint.translationOffset = new Vector3(-contactBugOffset, -contactBugOffset, -contactBugOffset);
 				setConstraint.locked = true;
 				setConstraint.constraintActive = true;
 				measureConstraint.translationAtRest = Vector3.zero;
