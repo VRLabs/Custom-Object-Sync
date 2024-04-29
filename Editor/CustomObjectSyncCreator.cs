@@ -732,9 +732,18 @@ namespace VRLabs.CustomObjectSyncCreator
 			}
 			Transform setTransform = syncSystem.transform.Find("Set");
 			Transform measureTransform = syncSystem.transform.Find("Measure");
-			float offset = -Mathf.Pow(2, maxRadius) / 10f;
-			setTransform.localPosition = new Vector3(offset, offset, offset);
-			measureTransform.localPosition = new Vector3(offset, offset, offset);
+			float contactBugOffset = Mathf.Pow(2, maxRadius - 6); // Fixes a bug where proximity contacts near edges give 0, so we set this theoretical 0 to far away from spawn to reduce chances of this happening
+
+
+			Transform contactx = measureTransform.Find("Position/SenderX");
+			contactx.GetComponent<PositionConstraint>().translationOffset = new Vector3(contactBugOffset / Mathf.Pow(2, maxRadius) * 3, 0, 0);
+			Transform contacty = measureTransform.Find("Position/SenderY");
+			contacty.GetComponent<PositionConstraint>().translationOffset = new Vector3(0, contactBugOffset / Mathf.Pow(2, maxRadius) * 3, 0);
+			Transform contactz = measureTransform.Find("Position/SenderZ");
+			contactz.GetComponent<PositionConstraint>().translationOffset = new Vector3(0, 0, contactBugOffset / Mathf.Pow(2, maxRadius) * 3);
+
+			
+			setTransform.localPosition = new Vector3(-contactBugOffset, -contactBugOffset, -contactBugOffset);
 			if (centeredOnAvatar)
 			{
 				PositionConstraint setConstraint = setTransform.gameObject.AddComponent<PositionConstraint>();
