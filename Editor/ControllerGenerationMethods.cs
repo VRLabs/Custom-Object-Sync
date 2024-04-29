@@ -16,6 +16,8 @@ namespace VRLabs.CustomObjectSyncCreator
 {
 	public class ControllerGenerationMethods
 	{
+
+		public static bool defaultWriteDefaults = false;
 		public static AnimationClip GenerateClip(string name, Bounds localBounds = default, float frameRate = 60f, WrapMode wrapMode = WrapMode.Default, AnimationEvent[] events = null)
 		{
 			return new AnimationClip()
@@ -151,7 +153,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			return new AnimatorState()
 			{
 				name = name,
-				writeDefaultValues = writeDefaultValues,
+				writeDefaultValues = writeDefaultValues || defaultWriteDefaults,
 				tag = tag,
 				motion = motion,
 				transitions = transitions ?? Array.Empty<AnimatorStateTransition>(),

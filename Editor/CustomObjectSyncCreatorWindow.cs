@@ -151,6 +151,13 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			GUILayout.Space(2);
 
+			using (new VerticalScope(GUI.skin.box))
+			{
+				creator.writeDefaults = GUILayout.Toggle(creator.writeDefaults, "Write Defaults");
+			}
+			
+			GUILayout.Space(2);
+			
 			if (creator.quickSync)
 			{
 				DisplayQuickSyncGUI();

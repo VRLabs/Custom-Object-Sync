@@ -20,7 +20,6 @@ namespace VRLabs.CustomObjectSyncCreator
 {
 	public class CustomObjectSyncCreator : ScriptableSingleton<CustomObjectSyncCreator>
 	{
-		public AnimatorController resourceController;
 		public GameObject resourcePrefab;
 		public int bitCount = 16;
 		public int maxRadius = 7;
@@ -33,6 +32,7 @@ namespace VRLabs.CustomObjectSyncCreator
 		public GameObject[] syncObjects;
 		public float dampingConstraintValue = 0.1f;
 		public bool quickSync;
+		public bool writeDefaults = true;
 
 		public const string STANDARD_NEW_ANIMATION_FOLDER = "Assets/VRLabs/GeneratedAssets/Animations/";
 		public const string STANDARD_NEW_ANIMATOR_FOLDER = "Assets/VRLabs/GeneratedAssets/Animators/";
@@ -201,6 +201,8 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			mergedController.parameters = mergedController.parameters.Concat(parameters.Where(p => mergedController.parameters.All(x => x.name != p.name))).ToArray();
 
+			ControllerGenerationMethods.defaultWriteDefaults = writeDefaults;
+			
 			if (!quickSync)
 			{
 				List<AnimatorControllerLayer> bitLayers = GenerateBitConversionLayers(objectCount, buffer, positionBits, objectParameterCount, rotationBits);
