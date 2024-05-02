@@ -67,7 +67,6 @@ https://github.com/VRLabs/Custom-Object-Sync/assets/76777936/4d12a815-bb1f-4c03-
 
 Rotation Sync:
 ```c++
-Colliders:              2
 Constraints:            11-13 + 2 per object 
 Contact Receivers:      6
 Contact Senders:        3
@@ -81,7 +80,6 @@ Expression Parameters:  1-256
 
 No Rotation Sync:
 ```c++
-Colliders:              2
 Constraints:            11-13 + 2 per object 
 Contact Receivers:      6
 Contact Senders:        3
