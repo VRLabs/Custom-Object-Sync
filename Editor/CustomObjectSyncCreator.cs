@@ -30,7 +30,7 @@ namespace VRLabs.CustomObjectSyncCreator
 		public bool addDampeningConstraint = false;
 		public bool useMultipleObjects = false;
 		public GameObject[] syncObjects;
-		public float dampingConstraintValue = 0.1f;
+		public float dampingConstraintValue = 0.15f;
 		public bool quickSync;
 		public bool writeDefaults = true;
 
@@ -296,25 +296,36 @@ namespace VRLabs.CustomObjectSyncCreator
 			GameObject syncSystem, AnimationClip buffer, int objectParameterCount, bool[][] objectPerms)
 		{
 			string[] targetStrings = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(addDampeningConstraint ? x.transform.parent.Find($"{x.name} Damping Sync") : x.transform, descriptor.transform)).ToArray();
-
+			string[] dampingConstraints = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)).ToArray();
+			
 			AnimationClip enableMeasure = GenerateClip("localMeasureEnabled");
 			AddCurve(enableMeasure, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 1));
 			
-			
 			AnimationClip remoteParentConstraintOff = GenerateClip("remoteParentConstraintDisabled");
 			AddCurve(remoteParentConstraintOff, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 0));
-			foreach (string targetString in targetStrings)
+			AddCurve(remoteParentConstraintOff, "Custom Object Sync/Set", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 1));
+
+			for (var i = 0; i < targetStrings.Length; i++)
 			{
-				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
-				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
+				var targetString = targetStrings[i];
+				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1 / 60f, 1));
+				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1 / 60f, 0));
+				if (addDampeningConstraint)
+				{
+					AddCurve(remoteParentConstraintOff, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1 / 60f, 1));
+					AddCurve(remoteParentConstraintOff, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1 / 60f, 0));
+				}
 				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1 / 60f, 1));
 			}
-			
+
 			AnimationClip disableDamping = GenerateClip("localDisableDamping");
-			foreach (string targetPath in syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)))
+			if (addDampeningConstraint)
 			{
-				AddCurve(disableDamping, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
-				AddCurve(disableDamping, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
+				foreach (string targetPath in syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)))
+				{
+					AddCurve(disableDamping, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(disableDamping, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
+				}
 			}
 			
 			ChildAnimatorState StateIdleRemote = GenerateChildState(new Vector3(30f, 180f, 0f), GenerateState("Idle/Remote"));
@@ -389,16 +400,21 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			}
 			
-			AnimatorState StateRemoteOff = GenerateState("Remote Off", motion: remoteParentConstraintOff);
 			List<ChildAnimatorState> remoteOnStates = new List<ChildAnimatorState>();
 			AnimationClip[] constraintsEnabled = Enumerable.Range(0, targetStrings.Length).Select(i =>
 			{
 				string targetString = targetStrings[i];
 				AnimationClip remoteParentConstraintOn = GenerateClip($"remoteParentConstraintEnabled{i}");
 				AddCurve(remoteParentConstraintOn, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 0));
-				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 1));
+				AddCurve(remoteParentConstraintOn, "Custom Object Sync/Set", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 0));
+				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Linear(0, 0, 2/60f, 1));
 				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 0));
 				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				if (addDampeningConstraint)
+				{
+					AddCurve(remoteParentConstraintOn, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
+					AddCurve(remoteParentConstraintOn, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				}
 				return remoteParentConstraintOn;
 			}).ToArray();
 			AnimationClip[] constraintsDisabled = Enumerable.Range(0, targetStrings.Length).Select(i =>
@@ -408,6 +424,11 @@ namespace VRLabs.CustomObjectSyncCreator
 				AddCurve(remoteParentConstraintOffAnim, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 0));
 				AddCurve(remoteParentConstraintOffAnim, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 0));
 				AddCurve(remoteParentConstraintOffAnim, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				if (addDampeningConstraint)
+				{
+					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
+					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				}
 				return remoteParentConstraintOffAnim;
 			}).ToArray();
 			
@@ -594,6 +615,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				remoteOnStates.Add(displayStates.Last());
 			}
 
+			AnimatorState StateRemoteOff = GenerateState("Remote Off", motion: remoteParentConstraintOff);
 			displayStates.Add(GenerateChildState(new Vector3(260f, 0, 0f), StateRemoteOff));
 			
 			AnimatorStateMachine displayStateMachine = GenerateStateMachine("CustomObjectSync/Parameter Setup and Display", new Vector3(50f, 20f, 0f), new Vector3(50f, 120f, 0f), new Vector3(800f, 120f, 0f), states: displayStates.ToArray(), defaultState: StateIdleRemote.state);
