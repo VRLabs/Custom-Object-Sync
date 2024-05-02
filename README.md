@@ -12,8 +12,7 @@
 
 Sync objects across the network with custom range, precision, and parameter usage.
 
-![Rigidbody Throw](https://github.com/VRLabs/Custom-Object-Sync/assets/76777936/b4915105-3d27-4095-b162-435a2a981b89)
-
+![Preview](https://github.com/VRLabs/Custom-Object-Sync/assets/76777936/a31c61de-34c5-47ab-9be1-05602cd5d8ba)
 
 ### ⬇️ [Download Latest Version](https://github.com/VRLabs/Custom-Object-Sync/releases/latest)
 
