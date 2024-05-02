@@ -92,7 +92,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			VRCExpressionsMenu menuObject = descriptor.expressionsMenu;
 			
 			Directory.CreateDirectory(STANDARD_NEW_ANIMATOR_FOLDER);
-			string uniqueControllerPath = AssetDatabase.GenerateUniqueAssetPath(STANDARD_NEW_ANIMATOR_FOLDER + "CustomObjectCreator.controller");
+			string uniqueControllerPath = AssetDatabase.GenerateUniqueAssetPath(STANDARD_NEW_ANIMATOR_FOLDER + "CustomObjectSync.controller");
 			if (mergeController == null)
 			{
 				mergeController = new AnimatorController();
