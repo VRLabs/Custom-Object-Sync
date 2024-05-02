@@ -37,6 +37,8 @@ Sync objects across the network with custom range, precision, and parameter usag
 
 ## Install guide
 
+https://github.com/VRLabs/Custom-Object-Sync/assets/76777936/4d12a815-bb1f-4c03-b0fc-83f9ea98638a
+
 * Click `VRLabs -> Custom Object Sync` at the top of the screen.
 * Drag the object you want to sync into the `Objects to Sync` field.
 * Adjust the values until you're happy with them:
