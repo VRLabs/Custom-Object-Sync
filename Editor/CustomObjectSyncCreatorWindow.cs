@@ -318,7 +318,7 @@ namespace VRLabs.CustomObjectSyncCreator
 
 		public int DisplayInt(string s, int value, int lowerBound, int upperbound)
 		{
-			value = Math.Clamp(value, lowerBound, upperbound);
+			value = Mathf.Clamp(value, lowerBound, upperbound);
 			using (new HorizontalScope(GUI.skin.box))
 			{
 				GUILayout.Label(s, new GUILayoutOption[]{ GUILayout.MaxWidth(360)});

@@ -1290,9 +1290,9 @@ namespace VRLabs.CustomObjectSyncCreator
 					.FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController);
 				string[] layerNames = new[] {"CustomObjectSync/Parameter Setup and Display", "CustomObjectSync/Position Bit Convert" , "CustomObjectSync/Rotation Bit Convert", "CustomObjectSync/Sync" };
 				AnimatorControllerLayer[] layersToDelete = controller.layers.Where(x => x.name.StartsWith("CustomObjectSync/")).ToArray();
-				List<Object> usedAssets = new List<Object>();
+				List<Object> assets = new List<Object>();
 				
-				static void AddToAssetsListStateMachineRecursive(List<UnityEngine.Object> usedAssets, AnimatorStateMachine sm) {
+				void AddToAssetsListStateMachineRecursive(List<UnityEngine.Object> usedAssets, AnimatorStateMachine sm) {
 					usedAssets.Add(sm);
 					foreach (var behaviour in sm.behaviours) usedAssets.Add(behaviour);
 					foreach (var transition in sm.anyStateTransitions) usedAssets.Add(transition);
@@ -1318,14 +1318,14 @@ namespace VRLabs.CustomObjectSyncCreator
 							}
 						}
 					}
-					foreach (var state_machine in sm.stateMachines) AddToAssetsListStateMachineRecursive(usedAssets, state_machine.stateMachine);
+					foreach (var state_machine in sm.stateMachines) AddToAssetsListStateMachineRecursive(assets, state_machine.stateMachine);
 				}
 				
 				foreach (var animatorControllerLayer in layersToDelete)
 				{
-					AddToAssetsListStateMachineRecursive(usedAssets, animatorControllerLayer.stateMachine);
+					AddToAssetsListStateMachineRecursive(assets, animatorControllerLayer.stateMachine);
 				}
-				foreach (Object usedAsset in usedAssets)
+				foreach (Object usedAsset in assets)
 				{
 					AssetDatabase.RemoveObjectFromAsset(usedAsset);
 				}
