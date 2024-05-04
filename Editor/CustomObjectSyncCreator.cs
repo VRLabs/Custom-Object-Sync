@@ -2,19 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Cysharp.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.Animations;
-using UnityEditor.VersionControl;
 using UnityEngine;
 using UnityEngine.Animations;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
-using VRC.SDKBase;
 using static VRC.SDKBase.VRC_AvatarParameterDriver;
 using static VRLabs.CustomObjectSyncCreator.ControllerGenerationMethods;
 using Object = UnityEngine.Object;
-using Random = UnityEngine.Random;
 
 namespace VRLabs.CustomObjectSyncCreator
 {
