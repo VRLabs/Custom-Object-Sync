@@ -1341,7 +1341,16 @@ namespace VRLabs.CustomObjectSyncCreator
 					if (targetConstraint != null)
 					{
 						Transform dampingObj = targetConstraint.GetSource(0).sourceTransform;
-						if (dampingObj == null) continue;
+						if (dampingObj == null)
+						{
+							userObject.transform.parent = descriptor.transform;
+							if (userObject.GetComponent<ParentConstraint>() != null)
+							{
+								DestroyImmediate(userObject.GetComponent<ParentConstraint>());
+							}
+							continue;
+						};
+						
 						ParentConstraint parentConstraint = dampingObj.gameObject.GetComponent<ParentConstraint>();
 						if (parentConstraint != null)
 						{
@@ -1363,6 +1372,10 @@ namespace VRLabs.CustomObjectSyncCreator
 							RenameClipPaths(allClips, false, oldPath, newPath);
 							DestroyImmediate(target.gameObject);
 						}
+						else
+						{
+							userObject.transform.parent = descriptor.transform;
+						}
 
 						if (userObject.GetComponent<ParentConstraint>() != null)
 						{
@@ -1370,7 +1383,6 @@ namespace VRLabs.CustomObjectSyncCreator
 						}
 					}
 				}
-				Transform result = prefab.Find("Set/Result");
 				DestroyImmediate(prefab.gameObject);
 			}
 			
