@@ -1341,6 +1341,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					if (targetConstraint != null)
 					{
 						Transform dampingObj = targetConstraint.GetSource(0).sourceTransform;
+						if (dampingObj == null) continue;
 						ParentConstraint parentConstraint = dampingObj.gameObject.GetComponent<ParentConstraint>();
 						if (parentConstraint != null)
 						{
@@ -1348,7 +1349,7 @@ namespace VRLabs.CustomObjectSyncCreator
 						}
 
 						Transform target = Enumerable.Range(0, targetConstraint.sourceCount)
-								.Select(x => targetConstraint.GetSource(x)).Where(x => x.sourceTransform.name.EndsWith("Target"))
+								.Select(x => targetConstraint.GetSource(x)).Where(x => x.sourceTransform != null && x.sourceTransform.name.EndsWith("Target"))
 								.Select(x => x.sourceTransform).FirstOrDefault();
 						if (target != null)
 						{
