@@ -1352,7 +1352,8 @@ namespace VRLabs.CustomObjectSyncCreator
 						};
 						
 						ParentConstraint parentConstraint = dampingObj.gameObject.GetComponent<ParentConstraint>();
-						if (parentConstraint != null)
+						if (parentConstraint != null && parentConstraint.sourceCount == 2 && parentConstraint.GetSource(1).sourceTransform != null &&
+						    parentConstraint.GetSource(1).sourceTransform == prefab.transform.Find("Set/Result"))
 						{
 							targetConstraint = parentConstraint;
 						}
