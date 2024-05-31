@@ -23,6 +23,8 @@ namespace VRLabs.CustomObjectSyncCreator
 			w.titleContent = new GUIContent("Custom Object Sync");
 		}
 		
+		Vector2 scrollPosition = Vector2.zero;
+
 		private void OnGUI()
 		{
 			if (creator == null)
@@ -47,131 +49,152 @@ namespace VRLabs.CustomObjectSyncCreator
 			}
 			
 			GUILayout.Space(2);
-
 			
 			using (new VerticalScope(GUI.skin.box))
 			{
-				if (creator.useMultipleObjects)
+				using (var scrollViewScope = new GUILayout.ScrollViewScope(scrollPosition))
 				{
-					SerializedObject so = new SerializedObject(creator);
-					SerializedProperty prop = so.FindProperty("syncObjects");
-					ReorderableList list = new ReorderableList(so, prop, true, true, true, true);
-					list.drawHeaderCallback = rect =>
+					scrollPosition = scrollViewScope.scrollPosition;
+					if (creator.useMultipleObjects)
 					{
-						EditorGUI.LabelField(rect, "Objects To Sync");
-					};
-					list.drawElementCallback = (rect, index, active, focused) =>
-					{
-						SerializedProperty element = prop.GetArrayElementAtIndex(index);
-						EditorGUI.ObjectField(rect, element, typeof(GameObject));
-					};
-					list.DoLayoutList();
-					so.ApplyModifiedProperties();
-				}
-				else
-				{
-					creator.syncObject = (GameObject)ObjectField("Object To Sync", creator.syncObject, typeof(GameObject), true);
-				}	
-				GUILayout.Space(2);
-				using (new GUILayout.HorizontalScope())
-				{
-					creator.useMultipleObjects = GUILayout.Toggle(creator.useMultipleObjects, "Sync Multiple Objects");
-					creator.quickSync = GUILayout.Toggle(creator.quickSync, new GUIContent("Quick Sync", "This will lower customizability but increase sync times by using 1 float per variable."));
-				}
-			} 
-
-			if (!creator.ObjectPredicate(x => x != null))
-			{
-				GUILayout.Label("Please select an object to sync.");
-				return;
-			}
-
-			if (creator.useMultipleObjects && creator.syncObjects.Count(x => x != null) != creator.syncObjects.Where(x => x != null).Distinct().Count())
-			{
-				GUILayout.Label("Please select distinct objects to sync.");
-				return;
-			}
-			
-			VRCAvatarDescriptor descriptor = creator.syncObjects.FirstOrDefault(x => x != null)?.GetComponentInParent<VRCAvatarDescriptor>();
-			
-			if (!descriptor)
-			{
-				GUILayout.Label("Object is not a child of an Avatar. Please select an object that is a child of an Avatar.");
-				return;
-			}
-
-			if (descriptor != null &&
-			    descriptor.baseAnimationLayers.FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController != null &&
-			    ((AnimatorController)descriptor.baseAnimationLayers.FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController).layers
-			    .Any(x => x.name.Contains("CustomObjectSync")))
-			{
-				using (new HorizontalScope(GUI.skin.box))
-				{
-					GUILayout.FlexibleSpace();
-					using (new VerticalScope())
-					{
-						GUILayout.Label($"Custom Object Sync found on avatar. Multiple custom object syncs not supported.", new  [] { GUILayout.ExpandWidth(true) });
-						using (new HorizontalScope())
+						SerializedObject so = new SerializedObject(creator);
+						SerializedProperty prop = so.FindProperty("syncObjects");
+						ReorderableList list = new ReorderableList(so, prop, true, true, true, true);
+						list.drawHeaderCallback = rect => { EditorGUI.LabelField(rect, "Objects To Sync"); };
+						list.drawElementCallback = (rect, index, active, focused) =>
 						{
-							GUILayout.FlexibleSpace();
-							GUILayout.Label($"Please remove previous custom object sync before continuing.", new  [] { GUILayout.ExpandWidth(true) });
-							GUILayout.FlexibleSpace();
-						}
-						if (GUILayout.Button("Remove Custom Sync"))
-						{
-							creator.Remove();
-						}
+							SerializedProperty element = prop.GetArrayElementAtIndex(index);
+							EditorGUI.ObjectField(rect, element, typeof(GameObject));
+						};
+						list.DoLayoutList();
+						so.ApplyModifiedProperties();
 					}
-					GUILayout.FlexibleSpace();
+					else
+					{
+						creator.syncObject = (GameObject)ObjectField("Object To Sync", creator.syncObject,
+							typeof(GameObject), true);
+					}
+
+					GUILayout.Space(2);
+					using (new GUILayout.HorizontalScope())
+					{
+						creator.useMultipleObjects =
+							GUILayout.Toggle(creator.useMultipleObjects, "Sync Multiple Objects");
+						creator.quickSync = GUILayout.Toggle(creator.quickSync,
+							new GUIContent("Quick Sync",
+								"This will lower customizability but increase sync times by using 1 float per variable."));
+					}
+
+
+					if (!creator.ObjectPredicate(x => x != null))
+					{
+						GUILayout.Label("Please select an object to sync.");
+						return;
+					}
+
+					if (creator.useMultipleObjects && creator.syncObjects.Count(x => x != null) !=
+					    creator.syncObjects.Where(x => x != null).Distinct().Count())
+					{
+						GUILayout.Label("Please select distinct objects to sync.");
+						return;
+					}
+
+					VRCAvatarDescriptor descriptor = creator.syncObjects.FirstOrDefault(x => x != null)
+						?.GetComponentInParent<VRCAvatarDescriptor>();
+
+					if (!descriptor)
+					{
+						GUILayout.Label(
+							"Object is not a child of an Avatar. Please select an object that is a child of an Avatar.");
+						return;
+					}
+
+					if (descriptor != null &&
+					    descriptor.baseAnimationLayers
+						    .FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController !=
+					    null &&
+					    ((AnimatorController)descriptor.baseAnimationLayers
+						    .FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController)
+					    .layers
+					    .Any(x => x.name.Contains("CustomObjectSync")))
+					{
+						using (new HorizontalScope(GUI.skin.box))
+						{
+							GUILayout.FlexibleSpace();
+							using (new VerticalScope())
+							{
+								GUILayout.Label(
+									$"Custom Object Sync found on avatar. Multiple custom object syncs not supported.",
+									new[] { GUILayout.ExpandWidth(true) });
+								using (new HorizontalScope())
+								{
+									GUILayout.FlexibleSpace();
+									GUILayout.Label($"Please remove previous custom object sync before continuing.",
+										new[] { GUILayout.ExpandWidth(true) });
+									GUILayout.FlexibleSpace();
+								}
+
+								if (GUILayout.Button("Remove Custom Sync"))
+								{
+									creator.Remove();
+								}
+							}
+
+							GUILayout.FlexibleSpace();
+						}
+
+						return;
+					}
+
+
+					if (creator.ObjectPredicate(x => x.GetComponent<ParentConstraint>() != null))
+					{
+						GUILayout.Label(
+							"Object has a Parent Constraint component. Please remove this component to continue.");
+						return;
+					}
+
+					if (creator.ObjectPredicate(x => Equals(descriptor.gameObject, x)))
+					{
+						GUILayout.Label(
+							"Object has a VRC Avatar Descriptor. The object you select should be the object you want to sync, not the avatar.");
+						return;
+					}
+
+					if (descriptor != null && descriptor.expressionsMenu != null &&
+					    descriptor.expressionsMenu.controls != null &&
+					    descriptor.expressionsMenu.controls.Count == 8)
+					{
+						Debug.LogError(
+							"Avatar Expression Menu Full. Please make some space in your top level Expression Menu to continue.");
+						return;
+					}
+
+					GUILayout.Space(2);
+
+					using (new VerticalScope(GUI.skin.box))
+					{
+						creator.writeDefaults = GUILayout.Toggle(creator.writeDefaults, "Write Defaults");
+					}
+
+					GUILayout.Space(2);
+
+					if (creator.quickSync)
+					{
+						DisplayQuickSyncGUI();
+					}
+					else
+					{
+						DisplayBitwiseGUI();
+					}
+
+					GUILayout.Space(2);
+
+					if (GUILayout.Button("Generate Custom Sync"))
+					{
+						creator.Generate();
+					}
 				}
-
-				return;
-			}
-
-			
-			if (creator.ObjectPredicate(x => x.GetComponent<ParentConstraint>()!= null))
-			{
-				GUILayout.Label("Object has a Parent Constraint component. Please remove this component to continue.");
-				return;
-			}
-			
-			if (creator.ObjectPredicate(x => Equals(descriptor.gameObject, x)))
-			{
-				GUILayout.Label("Object has a VRC Avatar Descriptor. The object you select should be the object you want to sync, not the avatar.");
-				return;
-			}
-
-			if (descriptor != null && descriptor.expressionsMenu != null && 
-			    descriptor.expressionsMenu.controls != null &&
-			    descriptor.expressionsMenu.controls.Count == 8)
-			{
-				Debug.LogError("Avatar Expression Menu Full. Please make some space in your top level Expression Menu to continue.");
-				return;
-			}
-
-			GUILayout.Space(2);
-
-			using (new VerticalScope(GUI.skin.box))
-			{
-				creator.writeDefaults = GUILayout.Toggle(creator.writeDefaults, "Write Defaults");
-			}
-			
-			GUILayout.Space(2);
-			
-			if (creator.quickSync)
-			{
-				DisplayQuickSyncGUI();
-			}
-			else
-			{
-				DisplayBitwiseGUI();
-			}
-
-			GUILayout.Space(2);
-			
-			if (GUILayout.Button("Generate Custom Sync"))
-			{
-				creator.Generate();
 			}
 		}
 
