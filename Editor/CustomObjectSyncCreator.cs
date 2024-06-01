@@ -6,10 +6,14 @@ using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
 using UnityEngine.Animations;
+using VRC.Dynamics;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
+using VRC.SDK3.Dynamics.Contact.Components;
 using static VRC.SDKBase.VRC_AvatarParameterDriver;
 using static VRLabs.CustomObjectSyncCreator.ControllerGenerationMethods;
+using AnimationCurve = UnityEngine.AnimationCurve;
+using GameObject = UnityEngine.GameObject;
 using Object = UnityEngine.Object;
 
 namespace VRLabs.CustomObjectSyncCreator
@@ -295,10 +299,12 @@ namespace VRLabs.CustomObjectSyncCreator
 		{
 			string[] targetStrings = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(addDampeningConstraint ? x.transform.parent.Find($"{x.name} Damping Sync") : x.transform, descriptor.transform)).ToArray();
 			string[] dampingConstraints = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)).ToArray();
-			
+			float contactBugOffset = Mathf.Pow(2, maxRadius - 6); // Fixes a bug where proximity contacts near edges give 0, so we set this theoretical 0 to far away from spawn to reduce chances of this happening
+
 			AnimationClip enableMeasure = GenerateClip("localMeasureEnabled");
 			AddCurve(enableMeasure, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 1));
-			
+			AddContactCurves(enableMeasure, AnimationCurve.Constant(0, 1f, contactBugOffset));
+
 			AnimationClip remoteParentConstraintOff = GenerateClip("remoteParentConstraintDisabled");
 			AddCurve(remoteParentConstraintOff, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 0));
 			AddCurve(remoteParentConstraintOff, "Custom Object Sync/Set", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 1));
@@ -336,37 +342,35 @@ namespace VRLabs.CustomObjectSyncCreator
 				Enumerable.Range(0, objectCount).ToList().ForEach(y=> AddCurve(localConstraintOn, targetString, typeof(ParentConstraint), $"m_Sources.Array.data[{y}].weight", AnimationCurve.Constant(0, 1 / 60f, x == y ? 1 : 0)));
 				return localConstraintOn;
 			}).ToArray();
-				
+			BlendTree localEnableTree = GenerateBlendTree("LocalSetTree", BlendTreeType.Direct);
+
+			Motion RecurseCreateTree(int depth, int index, int max)
+			{
+				if (depth == 0)
+				{
+					return index >= localConstraintTargetClips.Length ? buffer : localConstraintTargetClips[index];
+				}
+					
+				BlendTree childTree = GenerateBlendTree($"TargetTree{depth}-{index}", BlendTreeType.Simple1D, blendParameter: $"CustomObjectSync/LocalReadBit{depth - 1}");
+				childTree.children = new[]
+				{
+					GenerateChildMotion(RecurseCreateTree(depth - 1, index * 2, max)),
+					GenerateChildMotion(RecurseCreateTree(depth - 1, index * 2 + 1, max))
+				};
+				return childTree;
+			}
+
+			Motion initialTargetTree = RecurseCreateTree(objectParameterCount, 0,(int)Math.Pow(2, objectParameterCount));
+			localEnableTree.children = new[]
+			{
+				GenerateChildMotion(enableMeasure, directBlendParameter: "CustomObjectSync/One"),
+				GenerateChildMotion(disableDamping, directBlendParameter: "CustomObjectSync/One"),
+				GenerateChildMotion(initialTargetTree, directBlendParameter: "CustomObjectSync/One")
+			};
+
 			for (var p = 0; p < axisPermutations.Length; p++)
 			{
 				bool[] perm = axisPermutations[p];
-
-				BlendTree localEnableTree = GenerateBlendTree("LocalSetTree", BlendTreeType.Direct);
-
-				Motion RecurseCreateTree(int depth, int index, int max)
-				{
-					if (depth == 0)
-					{
-						return index >= localConstraintTargetClips.Length ? buffer : localConstraintTargetClips[index];
-					}
-					
-					BlendTree childTree = GenerateBlendTree($"TargetTree{depth}-{index}", BlendTreeType.Simple1D, blendParameter: $"CustomObjectSync/LocalReadBit{depth - 1}");
-					childTree.children = new[]
-					{
-						GenerateChildMotion(RecurseCreateTree(depth - 1, index * 2, max)),
-						GenerateChildMotion(RecurseCreateTree(depth - 1, index * 2 + 1, max))
-					};
-					return childTree;
-				}
-
-				Motion initialTargetTree = RecurseCreateTree(objectParameterCount, 0,(int)Math.Pow(2, objectParameterCount));
-				localEnableTree.children = new[]
-				{
-					GenerateChildMotion(enableMeasure, directBlendParameter: "CustomObjectSync/One"),
-					GenerateChildMotion(disableDamping, directBlendParameter: "CustomObjectSync/One"),
-					GenerateChildMotion(initialTargetTree, directBlendParameter: "CustomObjectSync/One")
-				};
-				
 				AnimatorState stateRot = GenerateState($"X{(perm[0] ? "+" : "-")}Y{(perm[1] ? "+" : "-")}Z{(perm[2] ? "+" : "-")}Rot", motion: localEnableTree, writeDefaultValues: true);
 				stateRot.behaviours = new StateMachineBehaviour[] {
 					GenerateParameterDriver(
@@ -397,7 +401,24 @@ namespace VRLabs.CustomObjectSyncCreator
 				displayStates.Add(GenerateChildState(new Vector3(-470f, -210f + 60 * p, 0f), statePos));
 
 			}
+			void AddContactCurves(AnimationClip clip, AnimationCurve curve)
+			{
+				AddCurve(clip, "Custom Object Sync/Measure/Position/SenderX", typeof(PositionConstraint), "m_TranslationOffset.x", curve);
+				AddCurve(clip, "Custom Object Sync/Measure/Position/SenderY", typeof(PositionConstraint), "m_TranslationOffset.y", curve);
+				AddCurve(clip, "Custom Object Sync/Measure/Position/SenderZ", typeof(PositionConstraint), "m_TranslationOffset.z",  curve);
+			}
 			
+			AnimationClip ContactTimeoutClip = GenerateClip("ContactTimeout");
+			AddContactCurves(ContactTimeoutClip, GenerateCurve(new[] { GenerateKeyFrame(0, contactBugOffset), GenerateKeyFrame(0.1f, 10), GenerateKeyFrame(0.2f, contactBugOffset), GenerateKeyFrame(0.3f, contactBugOffset) }));
+			
+
+			BlendTree ContactTimeoutTree = GenerateBlendTree("ContactTimeout", BlendTreeType.Direct);
+			ContactTimeoutTree.children = new ChildMotion[]
+			{
+				GenerateChildMotion(motion: localEnableTree, directBlendParameter: "CustomObjectSync/One"),
+				GenerateChildMotion(motion: ContactTimeoutClip, directBlendParameter: "CustomObjectSync/One")
+			};
+			ChildAnimatorState ContactTimeoutState = GenerateChildState(new Vector3(-470f, -270f, 0f), GenerateState("ContactTimeout", motion: ContactTimeoutTree, writeDefaultValues: true));
 			List<ChildAnimatorState> remoteOnStates = new List<ChildAnimatorState>();
 			AnimationClip[] constraintsEnabled = Enumerable.Range(0, targetStrings.Length).Select(i =>
 			{
@@ -616,7 +637,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			AnimatorState StateRemoteOff = GenerateState("Remote Off", motion: remoteParentConstraintOff);
 			displayStates.Add(GenerateChildState(new Vector3(260f, 0, 0f), StateRemoteOff));
 			
-			AnimatorStateMachine displayStateMachine = GenerateStateMachine("CustomObjectSync/Parameter Setup and Display", new Vector3(50f, 20f, 0f), new Vector3(50f, 120f, 0f), new Vector3(800f, 120f, 0f), states: displayStates.ToArray(), defaultState: StateIdleRemote.state);
+			AnimatorStateMachine displayStateMachine = GenerateStateMachine("CustomObjectSync/Parameter Setup and Display", new Vector3(50f, 20f, 0f), new Vector3(50f, 120f, 0f), new Vector3(800f, 120f, 0f), states: displayStates.Append(ContactTimeoutState).ToArray(), defaultState: StateIdleRemote.state);
 
 			List<AnimatorStateTransition> anyStateTransitions = new List<AnimatorStateTransition>();
 			anyStateTransitions.Add(GenerateTransition("", conditions:
@@ -654,9 +675,9 @@ namespace VRLabs.CustomObjectSyncCreator
 						Enumerable.Range(0, axis.Length).SelectMany(x => new []
 							{
 								GenerateCondition(AnimatorConditionMode.Greater,
-									$"CustomObjectSync/Position{axis[x]}{(perm[x] ? "Pos" : "Neg")}", -0.000001f),
+									$"CustomObjectSync/Position{axis[x]}{(perm[x] ? "Pos" : "Neg")}", 0),
 								GenerateCondition(AnimatorConditionMode.Less,
-									$"CustomObjectSync/Position{axis[x]}{(!perm[x] ? "Pos" : "Neg")}", 0.000001f),
+									$"CustomObjectSync/Position{axis[x]}{(!perm[x] ? "Pos" : "Neg")}", 0.00000001f),
 							})
 							.Append(GenerateCondition(AnimatorConditionMode.If, "IsLocal", 0f))
 							.Append(GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/SetStage", 0f)).ToArray()
@@ -664,9 +685,15 @@ namespace VRLabs.CustomObjectSyncCreator
 				);
 			}
 
-			displayStateMachine.anyStateTransitions = anyStateTransitions.ToArray();
+
+			anyStateTransitions.Add(GenerateTransition("", conditions:
+					new [] { GenerateCondition(AnimatorConditionMode.If, "IsLocal", 0f),
+					GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/SetStage", 0f)}
+				, destinationState: ContactTimeoutState.state, hasExitTime: true, exitTime: 1f));
+
+			displayStateMachine.anyStateTransitions = anyStateTransitions.ToArray().Reverse().ToArray();
 			
-			AnimatorControllerLayer displayLayer = GenerateLayer("CustomObjectSync/Parameter Setup and Display", displayStateMachine);
+			AnimatorControllerLayer displayLayer = GenerateLayer("CustomObjectSync/Parameter Display", displayStateMachine);
 			return displayLayer;
 		}
 
