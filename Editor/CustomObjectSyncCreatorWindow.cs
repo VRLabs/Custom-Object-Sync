@@ -263,7 +263,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				GUILayout.Space(2);
 			}
 
-			creator.maxRadius = DisplayInt($"Radius: {(Math.Pow(2, creator.maxRadius)).ToString("G5")}m", creator.maxRadius, 1, 13);
+			creator.maxRadius = DisplayInt($"Radius: {(Math.Pow(2, creator.maxRadius)).ToString("G5")}m", creator.maxRadius, 3, 13);
 
 			GUILayout.Space(2);
 
