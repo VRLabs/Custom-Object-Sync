@@ -255,6 +255,8 @@ namespace VRLabs.CustomObjectSyncCreator
 			});
 
 			descriptor.expressionsMenu = menuObject;
+			EditorUtility.SetDirty(menuObject);
+			EditorUtility.SetDirty(parameterObject);
 			#endregion
 
 			GameObject syncSystem = InstallSystem(descriptor, mergedController, parameterObject);
