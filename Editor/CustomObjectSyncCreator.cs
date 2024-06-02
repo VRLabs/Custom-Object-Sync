@@ -1366,6 +1366,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					.Select(x => prefab.GetChild(x)).Where(x => x.name != "Set" && x.name != "Measure" && x.name != "Target"&& !x.name.Contains(" Damping Sync")).ToArray();
 				foreach (Transform userObject in userObjects)
 				{
+					if(userObject == null) continue;
 					ParentConstraint targetConstraint = userObject.GetComponent<ParentConstraint>();
 					if (targetConstraint != null)
 					{
@@ -1393,6 +1394,10 @@ namespace VRLabs.CustomObjectSyncCreator
 						if (target != null)
 						{
 							string oldPath = AnimationUtility.CalculateTransformPath(userObject.transform, descriptor.transform);
+							if (AnimationUtility.CalculateTransformPath(target, descriptor.transform).StartsWith(AnimationUtility.CalculateTransformPath(prefab, descriptor.transform)))
+							{
+								target.parent = prefab.parent;// Make sure if the user put the target under the prefab, it doesnt get deleted.
+							}
 							userObject.parent = target.parent.transform;
 							string newPath = AnimationUtility.CalculateTransformPath(userObject.transform, descriptor.transform);
 			
