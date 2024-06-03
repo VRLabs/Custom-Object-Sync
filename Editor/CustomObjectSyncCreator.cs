@@ -303,7 +303,7 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			AnimationClip enableMeasure = GenerateClip("localMeasureEnabled");
 			AddCurve(enableMeasure, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 1));
-			AddContactCurves(enableMeasure, AnimationCurve.Constant(0, 1f, contactBugOffset));
+			AddContactCurves(enableMeasure, AnimationCurve.Constant(0, 1f, contactBugOffset / Mathf.Pow(2, maxRadius) * 3));
 
 			AnimationClip remoteParentConstraintOff = GenerateClip("remoteParentConstraintDisabled");
 			AddCurve(remoteParentConstraintOff, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 0));
@@ -409,7 +409,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			}
 			
 			AnimationClip ContactTimeoutClip = GenerateClip("ContactTimeout");
-			AddContactCurves(ContactTimeoutClip, GenerateCurve(new[] { GenerateKeyFrame(0, contactBugOffset), GenerateKeyFrame(0.1f, 10), GenerateKeyFrame(0.2f, contactBugOffset), GenerateKeyFrame(0.3f, contactBugOffset) }));
+			AddContactCurves(ContactTimeoutClip, GenerateCurve(new[] { GenerateKeyFrame(0, contactBugOffset / Mathf.Pow(2, maxRadius) * 3), GenerateKeyFrame(0.1f, 10), GenerateKeyFrame(0.2f, contactBugOffset / Mathf.Pow(2, maxRadius) * 3), GenerateKeyFrame(0.3f, contactBugOffset / Mathf.Pow(2, maxRadius) * 3) }));
 			
 
 			BlendTree ContactTimeoutTree = GenerateBlendTree("ContactTimeout", BlendTreeType.Direct);
