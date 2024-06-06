@@ -165,7 +165,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					    descriptor.expressionsMenu.controls != null &&
 					    descriptor.expressionsMenu.controls.Count == 8)
 					{
-						Debug.LogError(
+						GUILayout.Label(
 							"Avatar Expression Menu Full. Please make some space in your top level Expression Menu to continue.");
 						return;
 					}
