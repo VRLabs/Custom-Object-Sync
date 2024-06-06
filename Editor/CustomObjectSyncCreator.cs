@@ -650,8 +650,9 @@ namespace VRLabs.CustomObjectSyncCreator
 			string objParam = quickSync ? "CustomObjectSync/Sync/Object" : "CustomObjectSync/Object";
 			for (var o = 0; o < remoteOnStates.Count; o++)
 			{
+				int index = quickSync ? (o + 1) % objectCount : o;
 				anyStateTransitions.Add(GenerateTransition("", conditions:
-					Enumerable.Range(0, objectParameterCount).Select(x => GenerateCondition(objectPerms[o][x] ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, $"{objParam}{x}", threshold: 0))
+					Enumerable.Range(0, objectParameterCount).Select(x => GenerateCondition(objectPerms[index][x] ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, $"{objParam}{x}", threshold: 0))
 						.Append(GenerateCondition(AnimatorConditionMode.IfNot, "IsLocal", 0f))
 						.Append(GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/Enabled", 0f)).ToArray()
 					, destinationState: remoteOnStates[o].state));
