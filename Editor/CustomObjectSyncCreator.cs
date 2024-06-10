@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEditor.Animations;
 using UnityEngine;
@@ -698,6 +699,47 @@ namespace VRLabs.CustomObjectSyncCreator
 			return displayLayer;
 		}
 
+		// From https://stackoverflow.com/questions/38069770/add-one-gameobject-component-into-another-gameobject-with-values-at-runtime
+		public static T CopyValues<T>(Component target, T source) where T : Component
+		{
+			Type type = target.GetType();
+			if (type != source.GetType()) return null; // type mis-match
+			BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Default | BindingFlags.DeclaredOnly;
+			PropertyInfo[] pinfos = type.GetProperties(flags);
+			foreach (var pinfo in pinfos)
+			{
+				if (pinfo.CanWrite)
+				{
+					try
+					{
+						pinfo.SetValue(target, pinfo.GetValue(source, null), null);
+					}
+					catch { } // In case of NotImplementedException being thrown.
+				}
+			}
+			FieldInfo[] finfos = type.GetFields(flags);
+			foreach (var finfo in finfos)
+			{
+				finfo.SetValue(target, finfo.GetValue(source));
+			}
+			return target as T;
+		}
+        
+		private void MoveConstraint(IConstraint constraint, GameObject targetObject)
+		{
+			IConstraint newConstraint = (IConstraint)targetObject.AddComponent(constraint.GetType());
+			CopyValues((Component)newConstraint, (Component)constraint);
+			for (var i = 0; i < constraint.sourceCount; i++)
+			{
+				var source = constraint.GetSource(i);
+				var newSource = new ConstraintSource();
+				newSource.sourceTransform = source.sourceTransform;
+				newSource.weight = source.weight;
+				newConstraint.AddSource(newSource);
+			}
+			DestroyImmediate((Component)constraint);
+		}
+
 		private GameObject InstallSystem(VRCAvatarDescriptor descriptor, AnimatorController mergedController,
 			VRCExpressionParameters parameterObject)
 		{
@@ -741,9 +783,41 @@ namespace VRLabs.CustomObjectSyncCreator
 					weight = 0f
 				});
 
-				string oldPath = AnimationUtility.CalculateTransformPath(targetSyncObject.transform, descriptor.transform);
+				string oldPath = GetDescriptorPath(targetSyncObject);
 				targetSyncObject.transform.parent = syncSystem.transform;
-
+				string newPath = GetDescriptorPath(targetSyncObject);
+				AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
+					.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
+					.ToArray();
+				RenameClipPaths(allClips, false, oldPath, newPath);
+				
+				var components = targetSyncObject.GetComponents<IConstraint>();
+				string targetPath = GetDescriptorPath(targetObject);
+				for (var j = 0; j < components.Length; j++)
+				{
+					// Move constraint animations to the new path.
+					AnimationClip[] targetClips = allClips.Where(x =>
+						AnimationUtility.GetCurveBindings(x)
+							.Any(x => x.type == components[j].GetType() && x.path == newPath)).ToArray();
+					foreach (AnimationClip animationClip in targetClips)
+					{
+						EditorCurveBinding[] curveBindings = AnimationUtility.GetCurveBindings(animationClip);
+						for (var bi = 0; bi < curveBindings.Length; bi++)
+						{
+							var curveBinding = curveBindings[bi];
+							AnimationCurve curve = AnimationUtility.GetEditorCurve(animationClip, curveBinding);
+							AnimationUtility.SetEditorCurve(animationClip, curveBinding, null);
+							if (curveBinding.type == components[j].GetType() && curveBinding.path == newPath)
+							{
+								curveBinding.path = targetPath;
+							}
+							AnimationUtility.SetEditorCurve(animationClip, curveBinding, curve);
+						}
+					}
+					
+					MoveConstraint(components[j], targetObject.gameObject);
+				}
+				
 				GameObject damping = null;
 				if (addDampeningConstraint)
 				{
@@ -762,13 +836,6 @@ namespace VRLabs.CustomObjectSyncCreator
 					});
 				}
 				
-				string newPath = AnimationUtility.CalculateTransformPath(targetSyncObject.transform, descriptor.transform);
-			
-				AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
-					.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
-					.ToArray();
-				RenameClipPaths(allClips, false, oldPath, newPath);
-
 				ParentConstraint containerConstraint = addDampeningConstraint ? damping.AddComponent<ParentConstraint>() : targetSyncObject.AddComponent<ParentConstraint>();
 				containerConstraint.AddSource(new ConstraintSource()
 				{
@@ -779,7 +846,8 @@ namespace VRLabs.CustomObjectSyncCreator
 					sourceTransform = syncSystem.transform.Find("Set/Result"), weight = 0f
 				});
 				containerConstraint.locked = true;
-				containerConstraint.constraintActive = true;	
+				containerConstraint.constraintActive = true;
+				
 			}
 			Transform setTransform = syncSystem.transform.Find("Set");
 			Transform measureTransform = syncSystem.transform.Find("Measure");
@@ -1362,6 +1430,25 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			if (descriptor.transform.Find("Custom Object Sync"))
 			{
+				void CantFindTarget(Transform userObject)
+				{
+					// Can't figure out the target, so can't move back to the old path. Just move the object to descriptor.
+					string oldPath = AnimationUtility.CalculateTransformPath(userObject.transform, descriptor.transform);
+					userObject.parent = descriptor.transform;
+					string newPath = AnimationUtility.CalculateTransformPath(userObject.transform, descriptor.transform);
+		
+					AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
+						.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
+						.ToArray();
+					RenameClipPaths(allClips, false, oldPath, newPath);
+						
+						
+					if (userObject.GetComponent<ParentConstraint>() != null)
+					{
+						DestroyImmediate(userObject.GetComponent<ParentConstraint>());
+					}
+				}
+				
 				Transform prefab = descriptor.transform.Find("Custom Object Sync");
 				Transform[] userObjects = Enumerable.Range(0, prefab.childCount)
 					.Select(x => prefab.GetChild(x)).Where(x => x.name != "Set" && x.name != "Measure" && x.name != "Target"&& !x.name.Contains(" Damping Sync")).ToArray();
@@ -1369,55 +1456,81 @@ namespace VRLabs.CustomObjectSyncCreator
 				{
 					if(userObject == null) continue;
 					ParentConstraint targetConstraint = userObject.GetComponent<ParentConstraint>();
-					if (targetConstraint != null)
+					if (targetConstraint == null)
 					{
-						Transform dampingObj = targetConstraint.GetSource(0).sourceTransform;
-						if (dampingObj == null)
-						{
-							userObject.transform.parent = descriptor.transform;
-							if (userObject.GetComponent<ParentConstraint>() != null)
-							{
-								DestroyImmediate(userObject.GetComponent<ParentConstraint>());
-							}
-							continue;
-						};
-						
-						ParentConstraint parentConstraint = dampingObj.gameObject.GetComponent<ParentConstraint>();
-						if (parentConstraint != null && parentConstraint.sourceCount == 2 && parentConstraint.GetSource(1).sourceTransform != null &&
-						    parentConstraint.GetSource(1).sourceTransform == prefab.transform.Find("Set/Result"))
-						{
-							targetConstraint = parentConstraint;
-						}
-
-						Transform target = Enumerable.Range(0, targetConstraint.sourceCount)
-								.Select(x => targetConstraint.GetSource(x)).Where(x => x.sourceTransform != null && x.sourceTransform.name.EndsWith("Target"))
-								.Select(x => x.sourceTransform).FirstOrDefault();
-						if (target != null)
-						{
-							string oldPath = AnimationUtility.CalculateTransformPath(userObject.transform, descriptor.transform);
-							if (AnimationUtility.CalculateTransformPath(target, descriptor.transform).StartsWith(AnimationUtility.CalculateTransformPath(prefab, descriptor.transform)))
-							{
-								target.parent = prefab.parent;// Make sure if the user put the target under the prefab, it doesnt get deleted.
-							}
-							userObject.parent = target.parent.transform;
-							string newPath = AnimationUtility.CalculateTransformPath(userObject.transform, descriptor.transform);
-			
-							AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
-								.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
-								.ToArray();
-							RenameClipPaths(allClips, false, oldPath, newPath);
-							DestroyImmediate(target.gameObject);
-						}
-						else
-						{
-							userObject.transform.parent = descriptor.transform;
-						}
-
-						if (userObject.GetComponent<ParentConstraint>() != null)
-						{
-							DestroyImmediate(userObject.GetComponent<ParentConstraint>());
-						}
+						CantFindTarget(userObject);
+						continue;
 					}
+					Transform dampingObj = targetConstraint.GetSource(0).sourceTransform;
+					if (dampingObj == null)
+					{
+						CantFindTarget(userObject);
+						continue;
+					};
+					
+					ParentConstraint parentConstraint = dampingObj.gameObject.GetComponent<ParentConstraint>();
+					if (parentConstraint != null && parentConstraint.sourceCount == 2 && parentConstraint.GetSource(1).sourceTransform != null &&
+					    parentConstraint.GetSource(1).sourceTransform == prefab.transform.Find("Set/Result"))
+					{
+						targetConstraint = parentConstraint;
+					}
+
+					Transform target = Enumerable.Range(0, targetConstraint.sourceCount)
+							.Select(x => targetConstraint.GetSource(x)).Where(x => x.sourceTransform != null && x.sourceTransform.name.EndsWith("Target"))
+							.Select(x => x.sourceTransform).FirstOrDefault();
+					
+					if (target == null)
+					{
+						CantFindTarget(userObject);
+						continue;
+					}
+					
+					string oldPath = GetDescriptorPath(userObject);
+					if (GetDescriptorPath(target).StartsWith(AnimationUtility.CalculateTransformPath(prefab, descriptor.transform)))
+					{
+						target.parent = prefab.parent;// Make sure if the user put the target under the prefab, it doesnt get deleted.
+					}
+					userObject.parent = target.parent.transform;
+					string newPath = GetDescriptorPath(userObject);
+		
+					AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
+						.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
+						.ToArray();
+					RenameClipPaths(allClips, false, oldPath, newPath);
+						
+					if (userObject.GetComponent<ParentConstraint>() != null)
+					{
+						DestroyImmediate(userObject.GetComponent<ParentConstraint>());
+					}
+					
+					var components = target.GetComponents<IConstraint>();
+					string targetPath = GetDescriptorPath(target);
+					for (var j = 0; j < components.Length; j++)
+					{
+						// Move constraint animations to the new path.
+						AnimationClip[] targetClips = allClips.Where(x =>
+							AnimationUtility.GetCurveBindings(x)
+								.Any(x => x.type == components[j].GetType() && x.path == targetPath)).ToArray();
+						foreach (AnimationClip animationClip in targetClips)
+						{
+							EditorCurveBinding[] curveBindings = AnimationUtility.GetCurveBindings(animationClip);
+							for (var bi = 0; bi < curveBindings.Length; bi++)
+							{
+								var curveBinding = curveBindings[bi];
+								AnimationCurve curve = AnimationUtility.GetEditorCurve(animationClip, curveBinding);
+								AnimationUtility.SetEditorCurve(animationClip, curveBinding, null);
+								if (curveBinding.type == components[j].GetType() && curveBinding.path == targetPath)
+								{
+									curveBinding.path = newPath;
+								}
+								AnimationUtility.SetEditorCurve(animationClip, curveBinding, curve);
+							}
+						}
+						MoveConstraint(components[j], userObject.gameObject);
+					}
+						
+					DestroyImmediate(target.gameObject);
+
 				}
 				DestroyImmediate(prefab.gameObject);
 			}
@@ -1425,6 +1538,14 @@ namespace VRLabs.CustomObjectSyncCreator
 			EditorUtility.DisplayDialog("Success!", "Custom Object Sync has been successfully removed", "Ok");
 		}
 
+		public string GetDescriptorPath(Transform obj)
+		{
+			VRCAvatarDescriptor descriptor = obj.GetComponentInParent<VRCAvatarDescriptor>();
+			return AnimationUtility.CalculateTransformPath(obj.transform, descriptor.transform);
+		}
+		
+		public string GetDescriptorPath(GameObject obj) => GetDescriptorPath(obj.transform);
+		
 		public int GetMaxBitCount()
 		{
 			int rotationBits = rotationEnabled ? (rotationPrecision * 3) : 0;

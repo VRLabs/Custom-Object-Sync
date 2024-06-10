@@ -146,14 +146,6 @@ namespace VRLabs.CustomObjectSyncCreator
 						return;
 					}
 
-
-					if (creator.ObjectPredicate(x => x.GetComponent<ParentConstraint>() != null))
-					{
-						GUILayout.Label(
-							"Object has a Parent Constraint component. Please remove this component to continue.");
-						return;
-					}
-
 					if (creator.ObjectPredicate(x => Equals(descriptor.gameObject, x)))
 					{
 						GUILayout.Label(
