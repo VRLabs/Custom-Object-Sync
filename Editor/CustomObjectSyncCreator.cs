@@ -785,6 +785,7 @@ namespace VRLabs.CustomObjectSyncCreator
 
 				string oldPath = GetDescriptorPath(targetSyncObject);
 				targetSyncObject.transform.parent = syncSystem.transform;
+				if (targetSyncObject.name == "Target") targetSyncObject.name = "User Target";
 				string newPath = GetDescriptorPath(targetSyncObject);
 				AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
 					.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
@@ -1451,7 +1452,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				
 				Transform prefab = descriptor.transform.Find("Custom Object Sync");
 				Transform[] userObjects = Enumerable.Range(0, prefab.childCount)
-					.Select(x => prefab.GetChild(x)).Where(x => x.name != "Set" && x.name != "Measure" && x.name != "Target"&& !x.name.Contains(" Damping Sync")).ToArray();
+					.Select(x => prefab.GetChild(x)).Where(x => x.name != "Set" && x.name != "Measure" && x.name != "Target" && !x.name.Contains(" Damping Sync")).ToArray();
 				foreach (Transform userObject in userObjects)
 				{
 					if(userObject == null) continue;
