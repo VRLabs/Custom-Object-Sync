@@ -1424,9 +1424,21 @@ namespace VRLabs.CustomObjectSyncCreator
 				{
 					AssetDatabase.RemoveObjectFromAsset(usedAsset);
 				}
-				
+
 				controller.layers = controller.layers.Where(x => layerNames.All(y => !x.name.StartsWith("CustomObjectSync/"))).ToArray();
 				controller.parameters = controller.parameters.Where(x => !x.name.Contains("CustomObjectSync/")).ToArray();
+
+				if (controller.layers.Count() < 1)
+				{
+					AnimatorControllerLayer baseLayer = new AnimatorControllerLayer
+					{
+						name = "Base Layer",
+						defaultWeight = 1f,
+						stateMachine = new AnimatorStateMachine()
+					};
+
+					controller.AddLayer(baseLayer);
+				}
 			}
 			
 			if (descriptor.transform.Find("Custom Object Sync"))
