@@ -184,7 +184,7 @@ namespace VRLabs.CustomObjectSyncCreator
 
 					if (GUILayout.Button("Generate Custom Sync"))
 					{
-						creator.Generate();
+						EditorApplication.delayCall += creator.Generate;
 					}
 				}
 			}
