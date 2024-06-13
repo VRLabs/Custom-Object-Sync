@@ -35,10 +35,10 @@ namespace VRLabs.CustomObjectSyncCreator
 		public bool quickSync;
 		public bool writeDefaults = true;
 
-		public const string STANDARD_NEW_ANIMATION_FOLDER = "Assets/VRLabs/GeneratedAssets/Animations/";
-		public const string STANDARD_NEW_ANIMATOR_FOLDER = "Assets/VRLabs/GeneratedAssets/Animators/";
-		public const string STANDARD_NEW_PARAMASSET_FOLDER = "Assets/VRLabs/GeneratedAssets/ExpressionParameters/";
-		public const string STANDARD_NEW_MENUASSET_FOLDER = "Assets/VRLabs/GeneratedAssets/ExpressionMenu/";
+		public const string STANDARD_NEW_ANIMATION_FOLDER = "Assets/VRLabs/GeneratedAssets/CustomObjectSync/Animations/";
+		public const string STANDARD_NEW_ANIMATOR_FOLDER = "Assets/VRLabs/GeneratedAssets/CustomObjectSync/Animators/";
+		public const string STANDARD_NEW_PARAMASSET_FOLDER = "Assets/VRLabs/GeneratedAssets/CustomObjectSync/ExpressionParameters/";
+		public const string STANDARD_NEW_MENUASSET_FOLDER = "Assets/VRLabs/GeneratedAssets/CustomObjectSync/ExpressionMenu/";
 		
 		public GameObject syncObject
 		{
