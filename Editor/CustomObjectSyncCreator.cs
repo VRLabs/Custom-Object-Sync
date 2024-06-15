@@ -1383,7 +1383,6 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				AnimatorController controller = ((AnimatorController)descriptor.baseAnimationLayers
 					.FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController);
-				string[] layerNames = new[] {"CustomObjectSync/Parameter Setup and Display", "CustomObjectSync/Position Bit Convert" , "CustomObjectSync/Rotation Bit Convert", "CustomObjectSync/Sync" };
 				AnimatorControllerLayer[] layersToDelete = controller.layers.Where(x => x.name.StartsWith("CustomObjectSync/")).ToArray();
 				List<Object> assets = new List<Object>();
 				
@@ -1425,7 +1424,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					AssetDatabase.RemoveObjectFromAsset(usedAsset);
 				}
 
-				controller.layers = controller.layers.Where(x => layerNames.All(y => !x.name.StartsWith("CustomObjectSync/"))).ToArray();
+				controller.layers = controller.layers.Where(x => !x.name.StartsWith("CustomObjectSync/")).ToArray();
 				controller.parameters = controller.parameters.Where(x => !x.name.Contains("CustomObjectSync/")).ToArray();
 
 				if (controller.layers.Count() < 1)
