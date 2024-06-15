@@ -799,7 +799,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					// Move constraint animations to the new path.
 					AnimationClip[] targetClips = allClips.Where(x =>
 						AnimationUtility.GetCurveBindings(x)
-							.Any(x => x.type == components[j].GetType() && x.path == newPath)).ToArray();
+							.Any(y => y.type == components[j].GetType() && y.path == newPath)).ToArray();
 					foreach (AnimationClip animationClip in targetClips)
 					{
 						EditorCurveBinding[] curveBindings = AnimationUtility.GetCurveBindings(animationClip);
@@ -1523,7 +1523,7 @@ namespace VRLabs.CustomObjectSyncCreator
 						// Move constraint animations to the new path.
 						AnimationClip[] targetClips = allClips.Where(x =>
 							AnimationUtility.GetCurveBindings(x)
-								.Any(x => x.type == components[j].GetType() && x.path == targetPath)).ToArray();
+								.Any(y => y.type == components[j].GetType() && y.path == targetPath)).ToArray();
 						foreach (AnimationClip animationClip in targetClips)
 						{
 							EditorCurveBinding[] curveBindings = AnimationUtility.GetCurveBindings(animationClip);
