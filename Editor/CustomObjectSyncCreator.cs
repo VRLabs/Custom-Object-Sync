@@ -282,7 +282,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			Directory.CreateDirectory(STANDARD_NEW_ANIMATION_FOLDER);
 			foreach (var clip in mergedController.animationClips)
 			{
-				if (!AssetDatabase.IsMainAsset(clip)){
+				if (String.IsNullOrEmpty(AssetDatabase.GetAssetPath(clip))){
 					if (String.IsNullOrEmpty(clip.name))
 					{
 						clip.name = "Anim";
