@@ -864,7 +864,7 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			
 			setTransform.localPosition = new Vector3(-contactBugOffset, -contactBugOffset, -contactBugOffset);
-			if (centeredOnAvatar)
+			if (centeredOnAvatar || quickSync)
 			{
 				PositionConstraint setConstraint = setTransform.gameObject.AddComponent<PositionConstraint>();
 				PositionConstraint measureConstraint = measureTransform.gameObject.AddComponent<PositionConstraint>();

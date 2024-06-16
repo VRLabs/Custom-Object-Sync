@@ -79,7 +79,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					using (new GUILayout.HorizontalScope())
 					{
 						creator.useMultipleObjects =
-							GUILayout.Toggle(creator.useMultipleObjects, "Sync Multiple Objects");
+							GUILayout.Toggle(creator.useMultipleObjects, new GUIContent("Sync Multiple Objects", "Sync multiple objects at once. This will increase sync times."));
 						creator.quickSync = GUILayout.Toggle(creator.quickSync,
 							new GUIContent("Quick Sync",
 								"This will lower customizability but increase sync times by using 1 float per variable."));
@@ -166,7 +166,7 @@ namespace VRLabs.CustomObjectSyncCreator
 
 					using (new VerticalScope(GUI.skin.box))
 					{
-						creator.writeDefaults = GUILayout.Toggle(creator.writeDefaults, "Write Defaults");
+						creator.writeDefaults = GUILayout.Toggle(creator.writeDefaults, new GUIContent("Write Defaults", "Whether or not to use Write Defaults on or off for the generated states."));
 					}
 
 					GUILayout.Space(2);
@@ -193,7 +193,6 @@ namespace VRLabs.CustomObjectSyncCreator
 		private void DisplayQuickSyncGUI()
 		{
 			creator.maxRadius = 8 - creator.positionPrecision;
-			creator.centeredOnAvatar = true;
 			creator.rotationPrecision = 8;
 			
 			string positionString = $"Position Precision: {FloatToStringConverter.Convert((float)Math.Pow(0.5, creator.positionPrecision) * 100)}cm";
@@ -300,14 +299,21 @@ namespace VRLabs.CustomObjectSyncCreator
 			using (new HorizontalScope(GUI.skin.box))
 			{
 				creator.rotationEnabled = GUILayout.Toggle(creator.rotationEnabled, "Enable Rotation Sync");
-				creator.centeredOnAvatar = EditorGUILayout.Popup("Sync Type", (creator.centeredOnAvatar ? 1 : 0), new string[] {"World Centered", "Avatar Centered"} ) == 1;
+				creator.centeredOnAvatar = EditorGUILayout.Popup(new GUIContent("Sync Type", 
+						"Avatar Centered drops the sync point at the avatar's base when enabling sync. This means radius can be way lower, but it is not late join synced.\n" +
+						"World Centered syncs from world origin, which means larger radius is required, but it is late join synced."), (creator.centeredOnAvatar ? 1 : 0), 
+					new GUIContent[]
+					{
+						new GUIContent("World Centered", "Syncs from world origin, which means larger radius is required, but it is late join synced."),
+						new GUIContent("Avatar Centered", "Drops the sync point at the avatar's base when enabling sync. This means radius can be way lower, but it is not late join synced.")
+					} ) == 1;
 			}
 
 			GUILayout.Space(2);
 
 			using (new HorizontalScope(GUI.skin.box))
 			{
-				creator.addDampeningConstraint = GUILayout.Toggle(creator.addDampeningConstraint, "Add Damping Constraint to Object");
+				creator.addDampeningConstraint = GUILayout.Toggle(creator.addDampeningConstraint, new GUIContent("Add Damping Constraint to Object", "Adds a damping constraint on the remote side, this makes the object slowly move to the new synced point instead of snapping to it."));
 				if (creator.addDampeningConstraint)
 				{
 					GUILayout.Space(5);
