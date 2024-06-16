@@ -776,7 +776,8 @@ namespace VRLabs.CustomObjectSyncCreator
 				Transform targetObject = new GameObject($"{targetSyncObject.name} Target").transform;
 				targetObject.parent = targetSyncObject.transform.parent;
 				targetObject.localPosition = targetSyncObject.transform.localPosition;
-
+				targetObject.localRotation = targetSyncObject.transform.localRotation;
+				targetObject.localScale = targetSyncObject.transform.localScale;
 				mainTargetParentConstraint.AddSource(new ConstraintSource()
 				{
 					sourceTransform = targetObject,
@@ -849,6 +850,10 @@ namespace VRLabs.CustomObjectSyncCreator
 				containerConstraint.locked = true;
 				containerConstraint.constraintActive = true;
 				
+				ScaleConstraint scaleConstraint = targetSyncObject.gameObject.AddComponent<ScaleConstraint>();
+				scaleConstraint.AddSource(new ConstraintSource(){sourceTransform = targetObject, weight = 1});
+				scaleConstraint.locked = true;
+				scaleConstraint.constraintActive = true;
 			}
 			Transform setTransform = syncSystem.transform.Find("Set");
 			Transform measureTransform = syncSystem.transform.Find("Measure");
@@ -1513,6 +1518,10 @@ namespace VRLabs.CustomObjectSyncCreator
 					if (userObject.GetComponent<ParentConstraint>() != null)
 					{
 						DestroyImmediate(userObject.GetComponent<ParentConstraint>());
+					}
+					if (userObject.GetComponent<ScaleConstraint>() != null)
+					{
+						DestroyImmediate(userObject.GetComponent<ScaleConstraint>());
 					}
 					
 					var components = target.GetComponents<IConstraint>();

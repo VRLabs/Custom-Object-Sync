@@ -67,7 +67,7 @@ https://github.com/VRLabs/Custom-Object-Sync/assets/76777936/4d12a815-bb1f-4c03-
 
 Rotation Sync:
 ```c++
-Constraints:            11-13 + 2 per object 
+Constraints:            11-13 + 3 per object 
 Contact Receivers:      6
 Contact Senders:        3
 FX Animator Layers:     2 + 2 per object
@@ -80,7 +80,7 @@ Expression Parameters:  1-256
 
 No Rotation Sync:
 ```c++
-Constraints:            11-13 + 2 per object 
+Constraints:            11-13 + 3 per object 
 Contact Receivers:      6
 Contact Senders:        3
 FX Animator Layers:     2 + 1 per object
