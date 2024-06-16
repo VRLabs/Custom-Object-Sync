@@ -256,6 +256,11 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			creator.maxRadius = DisplayInt($"Radius: {(Math.Pow(2, creator.maxRadius)).ToString("G5")}m", creator.maxRadius, 3, 13);
 
+			if (creator.maxRadius > 11)
+			{
+				GUILayout.Label("Warning: Radius is very high.\nMost worlds don't need this high radius, and it will cause the position to jitter when walking around.");
+			}
+			
 			GUILayout.Space(2);
 
 			var maxbitCount = creator.GetMaxBitCount();
