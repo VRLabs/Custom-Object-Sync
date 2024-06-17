@@ -179,7 +179,7 @@ namespace VRLabs.CustomObjectSyncCreator
 
 					using (new VerticalScope(GUI.skin.box))
 					{
-						creator.writeDefaults = GUILayout.Toggle(creator.writeDefaults, new GUIContent("Write Defaults", "Whether or not to use Write Defaults on or off for the generated states."));
+						creator.writeDefaults = GUILayout.Toggle(creator.writeDefaults, new GUIContent("Write Defaults", "Whether to use Write Defaults on or Write Defaults off for the generated states."));
 					}
 
 					GUILayout.Space(2);
