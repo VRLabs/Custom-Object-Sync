@@ -156,7 +156,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					
 					GUILayout.Space(2);
 					
-					creator.menuLocation = TextField("Menu Location", creator.menuLocation);
+					creator.menuLocation = TextField(new GUIContent("Menu Location", "The menu path to the menu in which the enable toggle will be placed. e.g. /Props/Ball"), creator.menuLocation);
 
 					if (creator.menuLocation != "" && creator.menuLocation != "/")
 					{
