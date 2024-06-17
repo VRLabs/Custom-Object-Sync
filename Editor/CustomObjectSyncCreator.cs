@@ -144,6 +144,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				AssetDatabase.SaveAssets();
 				AssetDatabase.Refresh();
 				menuObject = AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(uniquePath);
+				descriptor.expressionsMenu = menuObject;
 			}
 			
 			if (menuObject == null)
