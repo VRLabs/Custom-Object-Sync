@@ -172,15 +172,6 @@ namespace VRLabs.CustomObjectSyncCreator
 							GUILayout.Label("Menu Location is full. Please select a menu location that has space left or make some space in your selected menu location");
 							return;
 						}
-
-						if (descriptor != null && descriptor.expressionsMenu != null &&
-						    descriptor.expressionsMenu.controls != null &&
-						    descriptor.expressionsMenu.controls.Count == 8)
-						{
-							GUILayout.Label(
-								"Avatar Expression Menu Full. Please make some space in your top level Expression Menu to continue.");
-							return;
-						}
 					}
 
 
