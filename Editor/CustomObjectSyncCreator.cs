@@ -34,6 +34,7 @@ namespace VRLabs.CustomObjectSyncCreator
 		public float dampingConstraintValue = 0.15f;
 		public bool quickSync;
 		public bool writeDefaults = true;
+		public string menuLocation = "";
 
 		public const string STANDARD_NEW_ANIMATION_FOLDER = "Assets/VRLabs/GeneratedAssets/CustomObjectSync/Animations/";
 		public const string STANDARD_NEW_ANIMATOR_FOLDER = "Assets/VRLabs/GeneratedAssets/CustomObjectSync/Animators/";
@@ -64,6 +65,7 @@ namespace VRLabs.CustomObjectSyncCreator
 		}
 		
 		private string[] axis = new[] { "X", "Y", "Z" };
+
 		public void Generate()
 		{
 			AnimatorController mergedController = null;
@@ -90,7 +92,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			AnimatorController mergeController = runtimeController == null ? null : (AnimatorController) runtimeController;
 
 			VRCExpressionParameters parameterObject = descriptor.expressionParameters;
-			VRCExpressionsMenu menuObject = descriptor.expressionsMenu;
+			VRCExpressionsMenu menuObject = GetMenuFromLocation(descriptor, menuLocation);
 			
 			Directory.CreateDirectory(STANDARD_NEW_ANIMATOR_FOLDER);
 			string uniqueControllerPath = AssetDatabase.GenerateUniqueAssetPath(STANDARD_NEW_ANIMATOR_FOLDER + "CustomObjectSync.controller");
@@ -259,7 +261,6 @@ namespace VRLabs.CustomObjectSyncCreator
 				}
 			});
 
-			descriptor.expressionsMenu = menuObject;
 			EditorUtility.SetDirty(menuObject);
 			EditorUtility.SetDirty(parameterObject);
 			#endregion
@@ -1365,11 +1366,21 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			if (descriptor == null) return;
 
-			if (descriptor.expressionsMenu != null && descriptor.expressionsMenu.controls != null &&
-			    descriptor.expressionsMenu.controls.Any(x => x.parameter.name == "CustomObjectSync/Enabled"))
+			Stack<VRCExpressionsMenu> menus = new Stack<VRCExpressionsMenu>(new [] { descriptor.expressionsMenu });
+			while (menus.Count > 0)
 			{
-				descriptor.expressionsMenu.controls = descriptor.expressionsMenu.controls
-					.Where(x => x.parameter.name != "CustomObjectSync/Enabled").ToList();
+				VRCExpressionsMenu menu = menus.Pop();
+				if (menu == null || menu.controls == null) continue;
+				if (menu.controls.Any(x =>
+					    x.type == VRCExpressionsMenu.Control.ControlType.Toggle &&
+					    x.parameter.name == "CustomObjectSync/Enabled"))
+				{
+					menu.controls = menu.controls.Where(x => x.parameter.name != "CustomObjectSync/Enabled").ToList();
+					EditorUtility.SetDirty(menu);
+				}
+				menu.controls
+					.Where(x => x.type == VRCExpressionsMenu.Control.ControlType.SubMenu && x.subMenu != null)
+					.ToList().ForEach(x => menus.Push(x.subMenu));
 			}
 
 			if (descriptor.expressionParameters != null && descriptor.expressionParameters.parameters != null &&
@@ -1377,6 +1388,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				descriptor.expressionParameters.parameters = descriptor.expressionParameters.parameters
 					.Where(x => !x.name.Contains("CustomObjectSync/")).ToArray();
+				EditorUtility.SetDirty(descriptor.expressionParameters);
 			}
 
 			if (descriptor != null &&
@@ -1678,6 +1690,40 @@ namespace VRLabs.CustomObjectSyncCreator
                 }
             }
             finally { AssetDatabase.StopAssetEditing();  }
+        }
+        
+        public VRCExpressionsMenu GetMenuFromLocation(VRCAvatarDescriptor descriptor, string location)
+        {
+	        VRCExpressionsMenu menu = descriptor.expressionsMenu;
+	        if (location.StartsWith("/"))
+	        {
+		        location = location.Substring(1);
+	        }
+	        if (location.EndsWith("/"))
+	        {
+		        location = location.Substring(0, location.Length - 1);
+	        }
+			
+	        string[] menus = location.Split('/');
+	        if (menu == null)
+	        {
+		        if (menus.Length == 1 && menus[0] == "") return null; // Menu can be made and isn't full.
+		        return null; // Menu not found.
+	        }
+			
+	        for (int i = 0; i < menus.Length; i++)
+	        {
+		        string nextMenu = menus[i];
+		        if (menu.controls == null) return null; // Menu's fucked up
+
+		        VRCExpressionsMenu.Control nextMenuControl = menu.controls.Where(x => x.type == VRCExpressionsMenu.Control.ControlType.SubMenu).FirstOrDefault(x => x.name == nextMenu);
+		        if (nextMenuControl == null || nextMenuControl.subMenu == null) return null; // Menu not found
+				
+		        menu = nextMenuControl.subMenu;
+	        }
+			
+	        if (menu.controls == null) return null; // Menu's fucked up
+	        return menu;
         }
 		
 	}

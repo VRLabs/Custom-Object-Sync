@@ -7,6 +7,7 @@ using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.Assertions.Must;
 using VRC.SDK3.Avatars.Components;
+using VRC.SDK3.Avatars.ScriptableObjects;
 using static UnityEditor.EditorGUILayout;
 using AnimatorController = UnityEditor.Animations.AnimatorController;
 
@@ -152,15 +153,36 @@ namespace VRLabs.CustomObjectSyncCreator
 							"Object has a VRC Avatar Descriptor. The object you select should be the object you want to sync, not the avatar.");
 						return;
 					}
+					
+					GUILayout.Space(2);
+					
+					creator.menuLocation = TextField("Menu Location", creator.menuLocation);
 
-					if (descriptor != null && descriptor.expressionsMenu != null &&
-					    descriptor.expressionsMenu.controls != null &&
-					    descriptor.expressionsMenu.controls.Count == 8)
+					if (creator.menuLocation != "" && creator.menuLocation != "/")
 					{
-						GUILayout.Label(
-							"Avatar Expression Menu Full. Please make some space in your top level Expression Menu to continue.");
-						return;
+						VRCExpressionsMenu menu = creator.GetMenuFromLocation(descriptor, creator.menuLocation);
+						if (menu == null || menu.controls == null)
+						{
+							GUILayout.Label("Menu Location not found. Please select a valid menu location (e.g. /Props/Ball)");
+							return;
+						}
+
+						if (menu.controls.Count == 8)
+						{
+							GUILayout.Label("Menu Location is full. Please select a menu location that has space left or make some space in your selected menu location");
+							return;
+						}
+
+						if (descriptor != null && descriptor.expressionsMenu != null &&
+						    descriptor.expressionsMenu.controls != null &&
+						    descriptor.expressionsMenu.controls.Count == 8)
+						{
+							GUILayout.Label(
+								"Avatar Expression Menu Full. Please make some space in your top level Expression Menu to continue.");
+							return;
+						}
 					}
+
 
 					GUILayout.Space(2);
 
@@ -189,7 +211,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				}
 			}
 		}
-
+		
 		private void DisplayQuickSyncGUI()
 		{
 			creator.maxRadius = 8 - creator.positionPrecision;
