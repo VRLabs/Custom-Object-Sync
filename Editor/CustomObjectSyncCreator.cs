@@ -1440,7 +1440,8 @@ namespace VRLabs.CustomObjectSyncCreator
 						defaultWeight = 1f,
 						stateMachine = new AnimatorStateMachine()
 					};
-
+					AssetDatabase.AddObjectToAsset(baseLayer.stateMachine, controller);
+						
 					controller.AddLayer(baseLayer);
 				}
 			}
