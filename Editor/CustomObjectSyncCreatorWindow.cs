@@ -271,7 +271,10 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			if (creator.maxRadius > 11)
 			{
+				Color oldColor = GUI.color;
+				GUI.color = Color.yellow;
 				GUILayout.Label("Warning: Radius is very high.\nMost worlds don't need this high radius, and it will cause the position to jitter when walking around.");
+				GUI.color = oldColor;
 			}
 			
 			GUILayout.Space(2);
