@@ -323,21 +323,29 @@ namespace VRLabs.CustomObjectSyncCreator
 					state.motion = buffer;
 				}
 			}
-			
-			SerializeController(mergedController);
-			
 			Directory.CreateDirectory(STANDARD_NEW_ANIMATION_FOLDER);
-			foreach (var clip in mergedController.animationClips)
+
+			try
 			{
-				if (String.IsNullOrEmpty(AssetDatabase.GetAssetPath(clip))){
-					if (String.IsNullOrEmpty(clip.name))
-					{
-						clip.name = "Anim";
+				AssetDatabase.StartAssetEditing();
+				SerializeController(mergedController);
+				foreach (var clip in mergedController.animationClips)
+				{
+					if (String.IsNullOrEmpty(AssetDatabase.GetAssetPath(clip))){
+						if (String.IsNullOrEmpty(clip.name))
+						{
+							clip.name = "Anim";
+						}
+						var uniqueFileName = AssetDatabase.GenerateUniqueAssetPath($"{STANDARD_NEW_ANIMATION_FOLDER}{clip.name}.anim");
+						AssetDatabase.CreateAsset(clip, uniqueFileName);
 					}
-					var uniqueFileName = AssetDatabase.GenerateUniqueAssetPath($"{STANDARD_NEW_ANIMATION_FOLDER}{clip.name}.anim");
-					AssetDatabase.CreateAsset(clip, uniqueFileName);
 				}
 			}
+			finally
+			{
+				AssetDatabase.StopAssetEditing();
+			}
+
 
 			EditorUtility.DisplayDialog("Success!", "Custom Object Sync has been successfully installed", "Ok");
 		}
