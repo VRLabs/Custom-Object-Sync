@@ -42,6 +42,7 @@ https://github.com/VRLabs/Custom-Object-Sync/assets/76777936/4d12a815-bb1f-4c03-
 * Click `VRLabs -> Custom Object Sync` at the top of the screen.
 * Drag the object you want to sync into the `Objects to Sync` field.
 * Adjust the values until you're happy with them:
+  * Add Local Debug View: Adds a toggle to view the object's remote position and rotation. 
   * Quick Sync:
     * Position Precision: The position precision to be synced. Since this sync mode syncs floats, Position Precision also affects Range, and Rotation Precision is locked at 1 float per axis.
   * Non Quick Sync:

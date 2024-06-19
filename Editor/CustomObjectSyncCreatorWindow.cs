@@ -167,9 +167,9 @@ namespace VRLabs.CustomObjectSyncCreator
 							return;
 						}
 
-						if (menu.controls.Count == 8)
+						if (menu.controls.Count == 8 || (creator.addLocalDebugView && menu.controls.Count >= 7))
 						{
-							GUILayout.Label("Menu Location is full. Please select a menu location that has space left or make some space in your selected menu location");
+							GUILayout.Label("Menu Location is too full. Please select a menu location that has more space left or make some space in your selected menu location");
 							return;
 						}
 					}
@@ -177,9 +177,12 @@ namespace VRLabs.CustomObjectSyncCreator
 
 					GUILayout.Space(2);
 
-					using (new VerticalScope(GUI.skin.box))
+					using (new HorizontalScope(GUI.skin.box))
 					{
 						creator.writeDefaults = GUILayout.Toggle(creator.writeDefaults, new GUIContent("Write Defaults", "Whether to use Write Defaults on or Write Defaults off for the generated states."));
+						creator.addLocalDebugView = GUILayout.Toggle(creator.addLocalDebugView,
+							new GUIContent("Add Local Debug View",
+								"Adds a local debug view to the object. This will show the remote position and rotation of the object, locally."));
 					}
 
 					GUILayout.Space(2);
