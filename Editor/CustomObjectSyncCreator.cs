@@ -1794,11 +1794,8 @@ namespace VRLabs.CustomObjectSyncCreator
 	        }
 			
 	        string[] menus = location.Split('/');
-	        if (menu == null)
-	        {
-		        if (menus.Length == 1 && menus[0] == "") return null; // Menu can be made and isn't full.
-		        return null; // Menu not found.
-	        }
+	        
+		    if (menus.Length == 1 && menus[0] == "") return menu;
 			
 	        for (int i = 0; i < menus.Length; i++)
 	        {
