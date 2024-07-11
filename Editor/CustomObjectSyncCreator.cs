@@ -778,6 +778,11 @@ namespace VRLabs.CustomObjectSyncCreator
 					}
 					else
 					{
+						BlendTree stateTree = states[i + 2].state.motion as BlendTree;
+						AnimationClip lengthBuffer = GenerateClip("LengthDebugBuffer");
+						AddCurve(lengthBuffer, "THIS OBJECT DOES NOT EXIST", typeof(GameObject), "m_Enabled", AnimationCurve.Constant(0, 12/60f, 1));
+						stateTree.children = stateTree.children.Append(GenerateChildMotion(motion: lengthBuffer, directBlendParameter: "CustomObjectSync/One")).ToArray();
+						transition.hasExitTime = true;
 						transition.exitTime = 1f;
 					}
 				}
