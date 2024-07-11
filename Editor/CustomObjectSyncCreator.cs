@@ -762,12 +762,27 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			AnimatorStateTransition[] anyStateTransitions = Enumerable.Range(0, objectCount).Select(i =>
 			{
-				return GenerateTransition("", conditions:
+				AnimatorStateTransition transition = GenerateTransition("", conditions:
 					Enumerable.Range(0, objectParameterCount).Select(x => GenerateCondition(objectPerms[i][x] ? AnimatorConditionMode.Greater : AnimatorConditionMode.Less, $"CustomObjectSync/LocalReadBit{x}", threshold: 0.5f))
 						.Append(GenerateCondition(AnimatorConditionMode.If, "IsLocal", 0f))
 						.Append(GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/Enabled", 0f))
 						.Append(GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/LocalDebugView", 0f)).ToArray()
 					, destinationState: states[i+2].state);
+				if (objectCount == 1)
+				{
+					transition.canTransitionToSelf = true;
+
+					if (!quickSync)
+					{
+						transition.conditions = transition.conditions.Append(GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/StartRead/0", 0f)).Append(GenerateCondition(AnimatorConditionMode.IfNot, "CustomObjectSync/ReadInProgress/0", 0f)).ToArray();
+					}
+					else
+					{
+						transition.exitTime = 1f;
+					}
+				}
+				
+				return transition;
 			}).Append(GenerateTransition("", conditions: new []
 			{
 				GenerateCondition(AnimatorConditionMode.If, "IsLocal", 0f),

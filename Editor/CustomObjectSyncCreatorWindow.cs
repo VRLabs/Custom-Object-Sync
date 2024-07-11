@@ -158,21 +158,23 @@ namespace VRLabs.CustomObjectSyncCreator
 					
 					creator.menuLocation = TextField(new GUIContent("Menu Location", "The menu path to the menu in which the enable toggle will be placed. e.g. /Props/Ball"), creator.menuLocation);
 
+					VRCExpressionsMenu menu = creator.GetMenuFromLocation(descriptor, creator.menuLocation);
+
 					if (creator.menuLocation != "" && creator.menuLocation != "/")
 					{
-						VRCExpressionsMenu menu = creator.GetMenuFromLocation(descriptor, creator.menuLocation);
 						if (menu == null || menu.controls == null)
 						{
 							GUILayout.Label("Menu Location not found. Please select a valid menu location (e.g. /Props/Ball)");
 							return;
 						}
-
-						if (menu.controls.Count == 8 || (creator.addLocalDebugView && menu.controls.Count >= 7))
-						{
-							GUILayout.Label("Menu Location is too full. Please select a menu location that has more space left or make some space in your selected menu location");
-							return;
-						}
 					}
+
+					if (menu.controls.Count == 8 || (creator.addLocalDebugView && menu.controls.Count >= 7))
+					{
+						GUILayout.Label("Menu Location is too full. Please select a menu location that has more space left or make some space in your selected menu location");
+						return;
+					}
+
 
 
 					GUILayout.Space(2);
