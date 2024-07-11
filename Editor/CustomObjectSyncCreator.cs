@@ -501,8 +501,8 @@ namespace VRLabs.CustomObjectSyncCreator
 				AddCurve(remoteParentConstraintOffAnim, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
 				if (addDampeningConstraint)
 				{
-					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
-					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
 				}
 				return remoteParentConstraintOffAnim;
 			}).ToArray();
