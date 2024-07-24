@@ -501,8 +501,8 @@ namespace VRLabs.CustomObjectSyncCreator
 				AddCurve(remoteParentConstraintOffAnim, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
 				if (addDampeningConstraint)
 				{
-					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
-					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
 				}
 				return remoteParentConstraintOffAnim;
 			}).ToArray();
@@ -670,12 +670,28 @@ namespace VRLabs.CustomObjectSyncCreator
 			ChildAnimatorState IdleRemote = GenerateChildState(new Vector3(30f, 200f, 0f), StateIdleRemote);
 			states.Add(IdleRemote);
 			
-			AnimatorState StateIdleLocal = GenerateState("Idle Local", motion: buffer);
+			string[] targetStrings = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(addDampeningConstraint ? x.transform.parent.Find($"{x.name} Damping Sync") : x.transform, descriptor.transform)).ToArray();
+			string[] dampingConstraints = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)).ToArray();
+			
+			AnimationClip idleLocal = GenerateClip("IdleLocal");
+			Enumerable.Range(0, targetStrings.Length).ToList().ForEach(i =>
+			{
+				string targetString = targetStrings[i];
+				AnimationCurve enabledCurve = AnimationCurve.Constant(0, 1/60f, 1);
+				AddCurve(idleLocal, targetString, typeof(ParentConstraint), "m_Enabled",enabledCurve);
+				AddCurve(idleLocal, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				AddCurve(idleLocal, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
+				if (addDampeningConstraint)
+				{
+					AddCurve(idleLocal, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
+					AddCurve(idleLocal, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				}
+			});
+			
+			AnimatorState StateIdleLocal = GenerateState("Idle Local", motion: idleLocal);
 			ChildAnimatorState IdleLocal = GenerateChildState(new Vector3(30f, -80f, 0f), StateIdleLocal);
 			states.Add(IdleLocal);
 			
-			string[] targetStrings = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(addDampeningConstraint ? x.transform.parent.Find($"{x.name} Damping Sync") : x.transform, descriptor.transform)).ToArray();
-			string[] dampingConstraints = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)).ToArray();
 			AnimationClip[] constraintsEnabled = Enumerable.Range(0, targetStrings.Length).Select(i =>
 			{
 				string targetString = targetStrings[i];
@@ -762,12 +778,32 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			AnimatorStateTransition[] anyStateTransitions = Enumerable.Range(0, objectCount).Select(i =>
 			{
-				return GenerateTransition("", conditions:
+				AnimatorStateTransition transition = GenerateTransition("", conditions:
 					Enumerable.Range(0, objectParameterCount).Select(x => GenerateCondition(objectPerms[i][x] ? AnimatorConditionMode.Greater : AnimatorConditionMode.Less, $"CustomObjectSync/LocalReadBit{x}", threshold: 0.5f))
 						.Append(GenerateCondition(AnimatorConditionMode.If, "IsLocal", 0f))
 						.Append(GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/Enabled", 0f))
 						.Append(GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/LocalDebugView", 0f)).ToArray()
 					, destinationState: states[i+2].state);
+				if (objectCount == 1)
+				{
+					transition.canTransitionToSelf = true;
+
+					if (!quickSync)
+					{
+						transition.conditions = transition.conditions.Append(GenerateCondition(AnimatorConditionMode.If, "CustomObjectSync/StartRead/0", 0f)).Append(GenerateCondition(AnimatorConditionMode.IfNot, "CustomObjectSync/ReadInProgress/0", 0f)).ToArray();
+					}
+					else
+					{
+						BlendTree stateTree = states[i + 2].state.motion as BlendTree;
+						AnimationClip lengthBuffer = GenerateClip("LengthDebugBuffer");
+						AddCurve(lengthBuffer, "THIS OBJECT DOES NOT EXIST", typeof(GameObject), "m_Enabled", AnimationCurve.Constant(0, 12/60f, 1));
+						stateTree.children = stateTree.children.Append(GenerateChildMotion(motion: lengthBuffer, directBlendParameter: "CustomObjectSync/One")).ToArray();
+						transition.hasExitTime = true;
+						transition.exitTime = 1f;
+					}
+				}
+				
+				return transition;
 			}).Append(GenerateTransition("", conditions: new []
 			{
 				GenerateCondition(AnimatorConditionMode.If, "IsLocal", 0f),
