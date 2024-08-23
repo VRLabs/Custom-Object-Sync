@@ -4,7 +4,8 @@
 
 [![Generic badge](https://img.shields.io/github/downloads/VRLabs/Custom-Object-Sync/total?label=Downloads)](https://github.com/VRLabs/Custom-Object-Sync/releases/latest)
 [![Generic badge](https://img.shields.io/badge/License-MIT-informational.svg)](https://github.com/VRLabs/Custom-Object-Sync/blob/main/LICENSE)
-[![Generic badge](https://img.shields.io/badge/Unity-2019.4.31f1-lightblue.svg)](https://unity3d.com/unity/whats-new/2019.4.31)
+[![Generic badge](https://img.shields.io/badge/Quest-Compatible-green?logo=Meta)](https://img.shields.io/badge/Quest-Compatible-green?logo=Meta)
+[![Generic badge](https://img.shields.io/badge/Unity-2022.3.22f1-lightblue?logo=Unity)](https://unity.com/releases/editor/whats-new/2022.3.22)
 [![Generic badge](https://img.shields.io/badge/SDK-AvatarSDK3-lightblue.svg)](https://vrchat.com/home/download)
 
 [![Generic badge](https://img.shields.io/discord/706913824607043605?color=%237289da&label=DISCORD&logo=Discord&style=for-the-badge)](https://discord.vrlabs.dev/)
@@ -15,7 +16,6 @@ Sync objects across the network with custom range, precision, and parameter usag
 ![Preview](https://github.com/VRLabs/Custom-Object-Sync/assets/76777936/eb729e1f-d590-4810-bc3a-88df6915ed6a)
 
 ### ⬇️ [Download Latest Version](https://github.com/VRLabs/Custom-Object-Sync/releases/latest)
-
 
 ### 📦 [Add to VRChat Creator Companion](https://vrlabs.dev/packages?package=dev.vrlabs.custom-object-sync)
 
@@ -42,7 +42,7 @@ https://github.com/VRLabs/Custom-Object-Sync/assets/76777936/4d12a815-bb1f-4c03-
 * Click `VRLabs -> Custom Object Sync` at the top of the screen.
 * Drag the object you want to sync into the `Objects to Sync` field.
 * Adjust the values until you're happy with them:
-  * Add Local Debug View: Adds a toggle to view the object's remote position and rotation. 
+  * Add Local Debug View: Adds a toggle to view the object's remote position and rotation.
   * Quick Sync:
     * Position Precision: The position precision to be synced. Since this sync mode syncs floats, Position Precision also affects Range, and Rotation Precision is locked at 1 float per axis.
   * Non Quick Sync:
@@ -59,6 +59,9 @@ https://github.com/VRLabs/Custom-Object-Sync/assets/76777936/4d12a815-bb1f-4c03-
     * Damping value: How the damping behaves: 0 = don't move at all. 1 = move to the new position very fast.
 * Press Generate Custom Sync
 
+> [!NOTE]  
+> When building for Quest, you will have to remove unsupported components and shaders
+
 ## How to use
 
 * Enable the `CustomObjectSync/Enabled` bool to start the sync.
@@ -67,6 +70,7 @@ https://github.com/VRLabs/Custom-Object-Sync/assets/76777936/4d12a815-bb1f-4c03-
 ## Performance stats
 
 Rotation Sync:
+
 ```c++
 Constraints:            11-13 + 3 per object 
 Contact Receivers:      6
@@ -80,6 +84,7 @@ Expression Parameters:  1-256
 ```
 
 No Rotation Sync:
+
 ```c++
 Constraints:            11-13 + 3 per object 
 Contact Receivers:      6
@@ -93,6 +98,7 @@ Expression Parameters:  1-256
 ## Hierarchy layout
 
 Rotation Sync:
+
 ```html
 Custom Object Sync
 |-Target
@@ -124,6 +130,7 @@ Custom Object Sync
 ```
 
 No Rotation Sync:
+
 ```html
 Custom Object Sync
 |-Target
@@ -163,4 +170,3 @@ Custom Object Sync is available as-is under MIT. For more information see [LICEN
 [<img src="https://github.com/VRLabs/Resources/raw/main/Icons/Twitter.png" width="50" height="50">](https://twitter.com/vrlabsdev "VRLabs")
 
 </div>
-
