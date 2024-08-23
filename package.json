@@ -3,7 +3,7 @@
   "displayName": "Custom Object Sync",
   "version": "1.0.999",
   "license": "MIT",
-  "unity": "2019.4",
+  "unity": "2022.3",
   "description": "Customizable Object Sync",
   "author": {
     "name": "VRLabs",
@@ -12,7 +12,7 @@
   },
   "siteUrl": "https://github.com/VRLabs/Custom-Object-Sync",
   "vpmDependencies": {
-    "com.vrchat.avatars": ">=3.2.0"
+    "com.vrchat.avatars": "^3.7.0"
   },
   "legacyFolders": {
   },
@@ -25,5 +25,6 @@
   "unityPackageDestinationFolderMetas": {
     "Assets/VRLabs": "652a1ba5b00554143bc9a76307dbc4e8",
     "Assets/VRLabs/Custom Object Sync": "8dcb521ec80db344a9485178247c1567"
-  }
+  },
+  "questCompatibility": "full"
 }
