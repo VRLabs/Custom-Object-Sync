@@ -831,24 +831,34 @@ namespace VRLabs.CustomObjectSyncCreator
 		{
 			Type type = target.GetType();
 			if (type != source.GetType()) return null; // type mis-match
-			BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Default | BindingFlags.DeclaredOnly;
-			PropertyInfo[] pinfos = type.GetProperties(flags);
-			foreach (var pinfo in pinfos)
+			while (type != null && type != typeof(Behaviour))
 			{
-				if (pinfo.CanWrite)
+				BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+				                     BindingFlags.Default | BindingFlags.DeclaredOnly;
+				PropertyInfo[] pinfos = type.GetProperties(flags);
+				foreach (var pinfo in pinfos)
 				{
-					try
+					if (pinfo.CanWrite)
 					{
-						pinfo.SetValue(target, pinfo.GetValue(source, null), null);
+						try
+						{
+							pinfo.SetValue(target, pinfo.GetValue(source, null), null);
+						}
+						catch
+						{
+						} // In case of NotImplementedException being thrown.
 					}
-					catch { } // In case of NotImplementedException being thrown.
 				}
+
+				FieldInfo[] finfos = type.GetFields(flags);
+				foreach (var finfo in finfos)
+				{
+					finfo.SetValue(target, finfo.GetValue(source));
+				}
+
+				type = type.BaseType;
 			}
-			FieldInfo[] finfos = type.GetFields(flags);
-			foreach (var finfo in finfos)
-			{
-				finfo.SetValue(target, finfo.GetValue(source));
-			}
+
 			return target as T;
 		}
         
@@ -871,12 +881,6 @@ namespace VRLabs.CustomObjectSyncCreator
 		{
 			VRCConstraintBase newConstraint = (VRCConstraintBase)targetObject.AddComponent(constraint.GetType());
 			CopyValues((Component)newConstraint, (Component)constraint);
-			for (var i = 0; i < constraint.Sources.Count; i++)
-			{
-				var source = constraint.Sources[i];
-				var newSource = new VRCConstraintSource(source.SourceTransform, source.Weight, source.ParentPositionOffset, source.ParentRotationOffset);
-				newConstraint.Sources.Add(newSource);
-			}
 			DestroyImmediate((Component)constraint);
 		}
 
