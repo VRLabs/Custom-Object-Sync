@@ -1831,7 +1831,7 @@ namespace VRLabs.CustomObjectSyncCreator
                         {
                             ObjectReferenceKeyframe[] objectCurve = AnimationUtility.GetObjectReferenceCurve(clip, binding);
 
-                            if (!replaceEntire && binding.path.Contains(oldPath))
+                            if (!replaceEntire && binding.path.StartsWith(oldPath))
                             {
                                 AnimationUtility.SetObjectReferenceCurve(clip, binding, null);
                                 binding.path = binding.path.Replace(oldPath, newPath);
@@ -1849,7 +1849,7 @@ namespace VRLabs.CustomObjectSyncCreator
                         {
                             AnimationCurve floatCurve = AnimationUtility.GetEditorCurve(clip, binding);
 
-                            if (!replaceEntire && binding.path.Contains(oldPath))
+                            if (!replaceEntire && binding.path.StartsWith(oldPath))
                             {
                                 AnimationUtility.SetEditorCurve(clip, binding, null);
                                 binding.path = binding.path.Replace(oldPath, newPath);
