@@ -590,9 +590,9 @@ namespace VRLabs.CustomObjectSyncCreator
 			BlendTree[] localTrees = axis.Select(x =>
 			{
 				AnimationClip rotationXMin = GenerateClip($"Rotation{x}Min");
-				AddCurve(rotationXMin, "Custom Object Sync/Set/Result", typeof(RotationConstraint), $"RotationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, isDebugTree ? -180 : -180 - (360 / (float)Math.Pow(2, rotationPrecision)))) ;
+				AddCurve(rotationXMin, "Custom Object Sync/Set/Result", typeof(VRCRotationConstraint), $"RotationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, isDebugTree ? -180 : -180 - (360 / (float)Math.Pow(2, rotationPrecision)))) ;
 				AnimationClip rotationXMax = GenerateClip($"Rotation{x}Max");
-				AddCurve(rotationXMax, "Custom Object Sync/Set/Result", typeof(RotationConstraint), $"RotationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, isDebugTree ? 180 : 180 - (360 / (float)Math.Pow(2, rotationPrecision))));
+				AddCurve(rotationXMax, "Custom Object Sync/Set/Result", typeof(VRCRotationConstraint), $"RotationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, isDebugTree ? 180 : 180 - (360 / (float)Math.Pow(2, rotationPrecision))));
 				BlendTree rotationTree = GenerateBlendTree($"Rotation{x}", BlendTreeType.Simple1D,
 					blendParameter: isDebugTree ? $"CustomObjectSync/LocalDebugView/Rotation{x}" : $"CustomObjectSync/Rotation{x}");
 				rotationTree.children = new ChildMotion[]
