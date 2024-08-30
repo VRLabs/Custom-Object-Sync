@@ -684,8 +684,8 @@ namespace VRLabs.CustomObjectSyncCreator
 				AddCurve(idleLocal, targetString, typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 0));
 				if (addDampeningConstraint)
 				{
-					AddCurve(idleLocal, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
-					AddCurve(idleLocal, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(idleLocal, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(idleLocal, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 0));
 				}
 			});
 			
