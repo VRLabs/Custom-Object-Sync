@@ -169,7 +169,7 @@ namespace VRLabs.CustomObjectSyncCreator
 						}
 					}
 
-					if (menu.controls.Count == 8 || (creator.addLocalDebugView && menu.controls.Count >= 7))
+					if (menu != null && (menu.controls.Count == 8 || (creator.addLocalDebugView && menu.controls.Count >= 7)))
 					{
 						GUILayout.Label("Menu Location is too full. Please select a menu location that has more space left or make some space in your selected menu location");
 						return;

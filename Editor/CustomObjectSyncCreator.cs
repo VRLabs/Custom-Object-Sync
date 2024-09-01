@@ -11,6 +11,7 @@ using UnityEngine.Animations;
 using VRC.Dynamics;
 using VRC.SDK3.Avatars.Components;
 using VRC.SDK3.Avatars.ScriptableObjects;
+using VRC.SDK3.Dynamics.Constraint.Components;
 using VRC.SDK3.Dynamics.Contact.Components;
 using static VRC.SDKBase.VRC_AvatarParameterDriver;
 using static VRLabs.CustomObjectSyncCreator.ControllerGenerationMethods;
@@ -361,21 +362,21 @@ namespace VRLabs.CustomObjectSyncCreator
 			AddCurve(enableMeasure, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 1));
 			AddContactCurves(enableMeasure, AnimationCurve.Constant(0, 1f, contactBugOffset / Mathf.Pow(2, maxRadius) * 3));
 
-			AnimationClip remoteParentConstraintOff = GenerateClip("remoteParentConstraintDisabled");
-			AddCurve(remoteParentConstraintOff, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 0));
-			AddCurve(remoteParentConstraintOff, "Custom Object Sync/Set", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 1));
+			AnimationClip remoteVRCParentConstraintOff = GenerateClip("remoteVRCParentConstraintDisabled");
+			AddCurve(remoteVRCParentConstraintOff, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 0));
+			AddCurve(remoteVRCParentConstraintOff, "Custom Object Sync/Set", typeof(VRCPositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 1));
 
 			for (var i = 0; i < targetStrings.Length; i++)
 			{
 				var targetString = targetStrings[i];
-				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1 / 60f, 1));
-				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1 / 60f, 0));
+				AddCurve(remoteVRCParentConstraintOff, targetString, typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1 / 60f, 1));
+				AddCurve(remoteVRCParentConstraintOff, targetString, typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1 / 60f, 0));
 				if (addDampeningConstraint)
 				{
-					AddCurve(remoteParentConstraintOff, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1 / 60f, 1));
-					AddCurve(remoteParentConstraintOff, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1 / 60f, 0));
+					AddCurve(remoteVRCParentConstraintOff, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1 / 60f, 1));
+					AddCurve(remoteVRCParentConstraintOff, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1 / 60f, 0));
 				}
-				AddCurve(remoteParentConstraintOff, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1 / 60f, 1));
+				AddCurve(remoteVRCParentConstraintOff, targetString, typeof(VRCParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1 / 60f, 1));
 			}
 
 			AnimationClip disableDamping = GenerateClip("localDisableDamping");
@@ -383,8 +384,8 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				foreach (string targetPath in syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)))
 				{
-					AddCurve(disableDamping, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
-					AddCurve(disableDamping, targetPath, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
+					AddCurve(disableDamping, targetPath, typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(disableDamping, targetPath, typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 0));
 				}
 			}
 			
@@ -394,8 +395,8 @@ namespace VRLabs.CustomObjectSyncCreator
 			AnimationClip[] localConstraintTargetClips = Enumerable.Range(0, objectCount).Select(x =>
 			{
 				string targetString = AnimationUtility.CalculateTransformPath(syncSystem.transform, descriptor.transform) + "/Target";
-				AnimationClip localConstraintOn = GenerateClip($"localParentConstraintEnabled{x}");
-				Enumerable.Range(0, objectCount).ToList().ForEach(y=> AddCurve(localConstraintOn, targetString, typeof(ParentConstraint), $"m_Sources.Array.data[{y}].weight", AnimationCurve.Constant(0, 1 / 60f, x == y ? 1 : 0)));
+				AnimationClip localConstraintOn = GenerateClip($"localVRCParentConstraintEnabled{x}");
+				Enumerable.Range(0, objectCount).ToList().ForEach(y=> AddCurve(localConstraintOn, targetString, typeof(VRCParentConstraint), $"Sources.source{y}.Weight", AnimationCurve.Constant(0, 1 / 60f, x == y ? 1 : 0)));
 				return localConstraintOn;
 			}).ToArray();
 			BlendTree localEnableTree = GenerateBlendTree("LocalSetTree", BlendTreeType.Direct);
@@ -459,9 +460,9 @@ namespace VRLabs.CustomObjectSyncCreator
 			}
 			void AddContactCurves(AnimationClip clip, AnimationCurve curve)
 			{
-				AddCurve(clip, "Custom Object Sync/Measure/Position/SenderX", typeof(PositionConstraint), "m_TranslationOffset.x", curve);
-				AddCurve(clip, "Custom Object Sync/Measure/Position/SenderY", typeof(PositionConstraint), "m_TranslationOffset.y", curve);
-				AddCurve(clip, "Custom Object Sync/Measure/Position/SenderZ", typeof(PositionConstraint), "m_TranslationOffset.z",  curve);
+				AddCurve(clip, "Custom Object Sync/Measure/Position/SenderX", typeof(VRCPositionConstraint), "PositionOffset.x", curve);
+				AddCurve(clip, "Custom Object Sync/Measure/Position/SenderY", typeof(VRCPositionConstraint), "PositionOffset.y", curve);
+				AddCurve(clip, "Custom Object Sync/Measure/Position/SenderZ", typeof(VRCPositionConstraint), "PositionOffset.z",  curve);
 			}
 			
 			AnimationClip ContactTimeoutClip = GenerateClip("ContactTimeout");
@@ -479,32 +480,32 @@ namespace VRLabs.CustomObjectSyncCreator
 			AnimationClip[] constraintsEnabled = Enumerable.Range(0, targetStrings.Length).Select(i =>
 			{
 				string targetString = targetStrings[i];
-				AnimationClip remoteParentConstraintOn = GenerateClip($"remoteParentConstraintEnabled{i}");
-				AddCurve(remoteParentConstraintOn, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 0));
-				AddCurve(remoteParentConstraintOn, "Custom Object Sync/Set", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 0));
-				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Linear(0, 0, 2/60f, 1));
-				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 0));
-				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				AnimationClip remoteVRCParentConstraintOn = GenerateClip($"remoteVRCParentConstraintEnabled{i}");
+				AddCurve(remoteVRCParentConstraintOn, "Custom Object Sync/Measure", typeof(GameObject), "m_IsActive", AnimationCurve.Constant(0, 1/60f, 0));
+				AddCurve(remoteVRCParentConstraintOn, "Custom Object Sync/Set", typeof(VRCPositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 0));
+				AddCurve(remoteVRCParentConstraintOn, targetString, typeof(VRCParentConstraint), "m_Enabled", AnimationCurve.Linear(0, 0, 2/60f, 1));
+				AddCurve(remoteVRCParentConstraintOn, targetString, typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, 0));
+				AddCurve(remoteVRCParentConstraintOn, targetString, typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 1));
 				if (addDampeningConstraint)
 				{
-					AddCurve(remoteParentConstraintOn, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
-					AddCurve(remoteParentConstraintOn, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(remoteVRCParentConstraintOn, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
+					AddCurve(remoteVRCParentConstraintOn, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 1));
 				}
-				return remoteParentConstraintOn;
+				return remoteVRCParentConstraintOn;
 			}).ToArray();
 			AnimationClip[] constraintsDisabled = Enumerable.Range(0, targetStrings.Length).Select(i =>
 			{
 				string targetString = targetStrings[i];
-				AnimationClip remoteParentConstraintOffAnim = GenerateClip($"remoteParentConstraintDisabled{i}");
-				AddCurve(remoteParentConstraintOffAnim, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 0));
-				AddCurve(remoteParentConstraintOffAnim, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 0));
-				AddCurve(remoteParentConstraintOffAnim, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				AnimationClip remoteVRCParentConstraintOffAnim = GenerateClip($"remoteVRCParentConstraintDisabled{i}");
+				AddCurve(remoteVRCParentConstraintOffAnim, targetString, typeof(VRCParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 0));
+				AddCurve(remoteVRCParentConstraintOffAnim, targetString, typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, 0));
+				AddCurve(remoteVRCParentConstraintOffAnim, targetString, typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 1));
 				if (addDampeningConstraint)
 				{
-					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
-					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
+					AddCurve(remoteVRCParentConstraintOffAnim, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(remoteVRCParentConstraintOffAnim, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 0));
 				}
-				return remoteParentConstraintOffAnim;
+				return remoteVRCParentConstraintOffAnim;
 			}).ToArray();
 			
 			for (int o = 0; o < objectCount; o++)
@@ -518,7 +519,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				remoteOnStates.Add(displayStates.Last());
 			}
 
-			AnimatorState StateRemoteOff = GenerateState("Remote Off", motion: remoteParentConstraintOff);
+			AnimatorState StateRemoteOff = GenerateState("Remote Off", motion: remoteVRCParentConstraintOff);
 			displayStates.Add(GenerateChildState(new Vector3(260f, 0, 0f), StateRemoteOff));
 			
 			AnimatorStateMachine displayStateMachine = GenerateStateMachine("CustomObjectSync/Parameter Setup and Display", new Vector3(50f, 20f, 0f), new Vector3(50f, 120f, 0f), new Vector3(800f, 120f, 0f), states: displayStates.Append(ContactTimeoutState).ToArray(), defaultState: StateIdleRemote.state);
@@ -589,9 +590,9 @@ namespace VRLabs.CustomObjectSyncCreator
 			BlendTree[] localTrees = axis.Select(x =>
 			{
 				AnimationClip rotationXMin = GenerateClip($"Rotation{x}Min");
-				AddCurve(rotationXMin, "Custom Object Sync/Set/Result", typeof(RotationConstraint), $"m_RotationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, isDebugTree ? -180 : -180 - (360 / (float)Math.Pow(2, rotationPrecision)))) ;
+				AddCurve(rotationXMin, "Custom Object Sync/Set/Result", typeof(VRCRotationConstraint), $"RotationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, isDebugTree ? -180 : -180 - (360 / (float)Math.Pow(2, rotationPrecision)))) ;
 				AnimationClip rotationXMax = GenerateClip($"Rotation{x}Max");
-				AddCurve(rotationXMax, "Custom Object Sync/Set/Result", typeof(RotationConstraint), $"m_RotationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, isDebugTree ? 180 : 180 - (360 / (float)Math.Pow(2, rotationPrecision))));
+				AddCurve(rotationXMax, "Custom Object Sync/Set/Result", typeof(VRCRotationConstraint), $"RotationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, isDebugTree ? 180 : 180 - (360 / (float)Math.Pow(2, rotationPrecision))));
 				BlendTree rotationTree = GenerateBlendTree($"Rotation{x}", BlendTreeType.Simple1D,
 					blendParameter: isDebugTree ? $"CustomObjectSync/LocalDebugView/Rotation{x}" : $"CustomObjectSync/Rotation{x}");
 				rotationTree.children = new ChildMotion[]
@@ -610,13 +611,13 @@ namespace VRLabs.CustomObjectSyncCreator
 					float value = Mathf.Pow(2, maxRadius);
 					float offset = 1 / Mathf.Pow(2, positionPrecision + 1);
 					AnimationClip translationMin = GenerateClip($"Translation{x}Min");
-					AddCurve(translationMin, "Custom Object Sync/Set/Result", typeof(PositionConstraint), $"m_TranslationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f,  -offset - value));
+					AddCurve(translationMin, "Custom Object Sync/Set/Result", typeof(VRCPositionConstraint), $"PositionOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f,  -offset - value));
 					AnimationClip translationZeroNeg = GenerateClip($"Translation{x}ZeroNeg");
-					AddCurve(translationZeroNeg, "Custom Object Sync/Set/Result", typeof(PositionConstraint), $"m_TranslationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, -offset));
+					AddCurve(translationZeroNeg, "Custom Object Sync/Set/Result", typeof(VRCPositionConstraint), $"PositionOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, -offset));
 					AnimationClip translationZeroPos = GenerateClip($"Translation{x}ZeroPos");
-					AddCurve(translationZeroPos, "Custom Object Sync/Set/Result", typeof(PositionConstraint), $"m_TranslationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, offset));
+					AddCurve(translationZeroPos, "Custom Object Sync/Set/Result", typeof(VRCPositionConstraint), $"PositionOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, offset));
 					AnimationClip translationMax = GenerateClip($"Translation{x}Max");
-					AddCurve(translationMax, "Custom Object Sync/Set/Result", typeof(PositionConstraint), $"m_TranslationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, offset + value));
+					AddCurve(translationMax, "Custom Object Sync/Set/Result", typeof(VRCPositionConstraint), $"PositionOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, offset + value));
 					BlendTree translationTree = GenerateBlendTree("TranslationX", BlendTreeType.Simple1D, blendParameter: isDebugTree ? $"CustomObjectSync/LocalDebugView/PositionSign{x}" : $"CustomObjectSync/PositionSign{x}");
 					
 					BlendTree translationMinTree = GenerateBlendTree($"Translation{x}MinTree", blendType: BlendTreeType.Simple1D, blendParameter:isDebugTree ? $"CustomObjectSync/LocalDebugView/Position{x}" : $"CustomObjectSync/Position{x}");
@@ -644,9 +645,9 @@ namespace VRLabs.CustomObjectSyncCreator
 				localTrees = localTrees.Concat(axis.Select(x =>
 				{
 					AnimationClip translationMin = GenerateClip($"Translation{x}Min");
-					AddCurve(translationMin, "Custom Object Sync/Set/Result", typeof(PositionConstraint), $"m_TranslationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, -Mathf.Pow(2, maxRadius)));
+					AddCurve(translationMin, "Custom Object Sync/Set/Result", typeof(VRCPositionConstraint), $"PositionOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, -Mathf.Pow(2, maxRadius)));
 					AnimationClip translationMax = GenerateClip($"Translation{x}Max");
-					AddCurve(translationMax, "Custom Object Sync/Set/Result", typeof(PositionConstraint), $"m_TranslationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, Mathf.Pow(2, maxRadius)));
+					AddCurve(translationMax, "Custom Object Sync/Set/Result", typeof(VRCPositionConstraint), $"PositionOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, Mathf.Pow(2, maxRadius)));
 					BlendTree translationTree = GenerateBlendTree($"Translation{x}", BlendTreeType.Simple1D,
 						blendParameter: isDebugTree ? $"CustomObjectSync/LocalDebugView/Position{x}" : $"CustomObjectSync/Position{x}");
 					translationTree.children = new ChildMotion[]
@@ -678,13 +679,13 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				string targetString = targetStrings[i];
 				AnimationCurve enabledCurve = AnimationCurve.Constant(0, 1/60f, 1);
-				AddCurve(idleLocal, targetString, typeof(ParentConstraint), "m_Enabled",enabledCurve);
-				AddCurve(idleLocal, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 1));
-				AddCurve(idleLocal, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 0));
+				AddCurve(idleLocal, targetString, typeof(VRCParentConstraint), "m_Enabled",enabledCurve);
+				AddCurve(idleLocal, targetString, typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, 1));
+				AddCurve(idleLocal, targetString, typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 0));
 				if (addDampeningConstraint)
 				{
-					AddCurve(idleLocal, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
-					AddCurve(idleLocal, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(idleLocal, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(idleLocal, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 0));
 				}
 			});
 			
@@ -695,32 +696,32 @@ namespace VRLabs.CustomObjectSyncCreator
 			AnimationClip[] constraintsEnabled = Enumerable.Range(0, targetStrings.Length).Select(i =>
 			{
 				string targetString = targetStrings[i];
-				AnimationClip remoteParentConstraintOn = GenerateClip($"remoteParentConstraintEnabled{i}");
+				AnimationClip remoteVRCParentConstraintOn = GenerateClip($"remoteVRCParentConstraintEnabled{i}");
 				AnimationCurve enabledCurve = quickSync ? new AnimationCurve(new Keyframe(0, 0),  new Keyframe(6 / 60f, 0),  new Keyframe(7 / 60f, 1), new Keyframe(8 / 60f, 0)) : 
 					new AnimationCurve(new Keyframe(0, 0), new Keyframe(1 / 60f, 1), new Keyframe(2 / 60f, 0));
-				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Enabled",enabledCurve);
-				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 0));
-				AddCurve(remoteParentConstraintOn, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				AddCurve(remoteVRCParentConstraintOn, targetString, typeof(VRCParentConstraint), "m_Enabled",enabledCurve);
+				AddCurve(remoteVRCParentConstraintOn, targetString, typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, 0));
+				AddCurve(remoteVRCParentConstraintOn, targetString, typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 1));
 				if (addDampeningConstraint)
 				{
-					AddCurve(remoteParentConstraintOn, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
-					AddCurve(remoteParentConstraintOn, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(remoteVRCParentConstraintOn, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
+					AddCurve(remoteVRCParentConstraintOn, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 1));
 				}
-				return remoteParentConstraintOn;
+				return remoteVRCParentConstraintOn;
 			}).ToArray();
 			AnimationClip[] constraintsDisabled = Enumerable.Range(0, targetStrings.Length).Select(i =>
 			{
 				string targetString = targetStrings[i];
-				AnimationClip remoteParentConstraintOffAnim = GenerateClip($"remoteParentConstraintDisabled{i}");
-				AddCurve(remoteParentConstraintOffAnim, targetString, typeof(ParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 0));
-				AddCurve(remoteParentConstraintOffAnim, targetString, typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, 0));
-				AddCurve(remoteParentConstraintOffAnim, targetString, typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+				AnimationClip remoteVRCParentConstraintOffAnim = GenerateClip($"remoteVRCParentConstraintDisabled{i}");
+				AddCurve(remoteVRCParentConstraintOffAnim, targetString, typeof(VRCParentConstraint), "m_Enabled", AnimationCurve.Constant(0, 1/60f, 0));
+				AddCurve(remoteVRCParentConstraintOffAnim, targetString, typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, 0));
+				AddCurve(remoteVRCParentConstraintOffAnim, targetString, typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 1));
 				if (addDampeningConstraint)
 				{
-					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[0].weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
-					AddCurve(remoteParentConstraintOffAnim, dampingConstraints[i], typeof(ParentConstraint), "m_Sources.Array.data[1].weight", AnimationCurve.Constant(0, 1/60f, 1));
+					AddCurve(remoteVRCParentConstraintOffAnim, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, dampingConstraintValue));
+					AddCurve(remoteVRCParentConstraintOffAnim, dampingConstraints[i], typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 1));
 				}
-				return remoteParentConstraintOffAnim;
+				return remoteVRCParentConstraintOffAnim;
 			}).ToArray();
 			
 			for (int i = 0; i < objectCount; i++)
@@ -830,24 +831,34 @@ namespace VRLabs.CustomObjectSyncCreator
 		{
 			Type type = target.GetType();
 			if (type != source.GetType()) return null; // type mis-match
-			BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Default | BindingFlags.DeclaredOnly;
-			PropertyInfo[] pinfos = type.GetProperties(flags);
-			foreach (var pinfo in pinfos)
+			while (type != null && type != typeof(Behaviour))
 			{
-				if (pinfo.CanWrite)
+				BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+				                     BindingFlags.Default | BindingFlags.DeclaredOnly;
+				PropertyInfo[] pinfos = type.GetProperties(flags);
+				foreach (var pinfo in pinfos)
 				{
-					try
+					if (pinfo.CanWrite)
 					{
-						pinfo.SetValue(target, pinfo.GetValue(source, null), null);
+						try
+						{
+							pinfo.SetValue(target, pinfo.GetValue(source, null), null);
+						}
+						catch
+						{
+						} // In case of NotImplementedException being thrown.
 					}
-					catch { } // In case of NotImplementedException being thrown.
 				}
+
+				FieldInfo[] finfos = type.GetFields(flags);
+				foreach (var finfo in finfos)
+				{
+					finfo.SetValue(target, finfo.GetValue(source));
+				}
+
+				type = type.BaseType;
 			}
-			FieldInfo[] finfos = type.GetFields(flags);
-			foreach (var finfo in finfos)
-			{
-				finfo.SetValue(target, finfo.GetValue(source));
-			}
+
 			return target as T;
 		}
         
@@ -863,6 +874,13 @@ namespace VRLabs.CustomObjectSyncCreator
 				newSource.weight = source.weight;
 				newConstraint.AddSource(newSource);
 			}
+			DestroyImmediate((Component)constraint);
+		}
+		
+		private void MoveVRChatConstraint(VRCConstraintBase constraint, GameObject targetObject)
+		{
+			VRCConstraintBase newConstraint = (VRCConstraintBase)targetObject.AddComponent(constraint.GetType());
+			CopyValues((Component)newConstraint, (Component)constraint);
 			DestroyImmediate((Component)constraint);
 		}
 
@@ -882,20 +900,20 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				Transform sender = syncSystem.transform.Find($"Measure/Position/Sender{s}");
 				float radius = Mathf.Pow(2, maxRadius);
-				PositionConstraint sendConstraint = sender.GetComponent<PositionConstraint>();
-				sendConstraint.translationAtRest = new Vector3(0, 0, 0);
-				ConstraintSource source0 = sendConstraint.GetSource(0);
-				source0.weight = 1 - (3f / (radius));	
-				sendConstraint.SetSource(0, source0);
-				ConstraintSource source1 = sendConstraint.GetSource(1);
-				source1.weight = 3f / (radius);
-				sendConstraint.SetSource(1, source1);
+				VRCPositionConstraint sendConstraint = sender.GetComponent<VRCPositionConstraint>();
+				sendConstraint.PositionAtRest = new Vector3(0, 0, 0);
+				VRCConstraintSource source0 = sendConstraint.Sources[0];
+				source0.Weight = 1 - (3f / (radius));	
+				sendConstraint.Sources[0] = source0;
+				VRCConstraintSource source1 = sendConstraint.Sources[1];
+				source1.Weight = 3f / (radius);
+				sendConstraint.Sources[1] = source1;
 			}
 
 			Transform mainTargetObject = syncSystem.transform.Find("Target");
-			ParentConstraint mainTargetParentConstraint = mainTargetObject.gameObject.AddComponent<ParentConstraint>();
-			mainTargetParentConstraint.locked = true;
-			mainTargetParentConstraint.constraintActive = true;
+			VRCParentConstraint mainTargetVRCParentConstraint = mainTargetObject.gameObject.AddComponent<VRCParentConstraint>();
+			mainTargetVRCParentConstraint.Locked = true;
+			mainTargetVRCParentConstraint.IsActive = true;
 			for (var i = 0; i < syncObjects.Length; i++)
 			{
 				GameObject targetSyncObject = syncObjects[i];
@@ -904,12 +922,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				targetObject.localPosition = targetSyncObject.transform.localPosition;
 				targetObject.localRotation = targetSyncObject.transform.localRotation;
 				targetObject.localScale = targetSyncObject.transform.localScale;
-				mainTargetParentConstraint.AddSource(new ConstraintSource()
-				{
-					sourceTransform = targetObject,
-					weight = 0f
-				});
-
+				mainTargetVRCParentConstraint.Sources.Add(new VRCConstraintSource(targetObject, 0f, Vector3.zero, Vector3.zero));
 				string oldPath = GetDescriptorPath(targetSyncObject);
 				targetSyncObject.transform.parent = syncSystem.transform;
 				if (targetSyncObject.name == "Target") targetSyncObject.name = "User Target";
@@ -919,6 +932,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					.ToArray();
 				RenameClipPaths(allClips, false, oldPath, newPath);
 				
+				// Unity Constraints
 				var components = targetSyncObject.GetComponents<IConstraint>();
 				string targetPath = GetDescriptorPath(targetObject);
 				for (var j = 0; j < components.Length; j++)
@@ -946,40 +960,56 @@ namespace VRLabs.CustomObjectSyncCreator
 					MoveConstraint(components[j], targetObject.gameObject);
 				}
 				
+				// VRChat Constraints
+				var vrcComponents = targetSyncObject.GetComponents<VRCConstraintBase>();
+				string vrcTargetPath = GetDescriptorPath(targetObject);
+				for (var j = 0; j < vrcComponents.Length; j++)
+				{
+					// Move constraint animations to the new path.
+					AnimationClip[] targetClips = allClips.Where(x =>
+						AnimationUtility.GetCurveBindings(x)
+							.Any(y => y.type == vrcComponents[j].GetType() && y.path == newPath)).ToArray();
+					foreach (AnimationClip animationClip in targetClips)
+					{
+						EditorCurveBinding[] curveBindings = AnimationUtility.GetCurveBindings(animationClip);
+						for (var bi = 0; bi < curveBindings.Length; bi++)
+						{
+							var curveBinding = curveBindings[bi];
+							AnimationCurve curve = AnimationUtility.GetEditorCurve(animationClip, curveBinding);
+							AnimationUtility.SetEditorCurve(animationClip, curveBinding, null);
+							if (curveBinding.type == vrcComponents[j].GetType() && curveBinding.path == newPath)
+							{
+								curveBinding.path = vrcTargetPath;
+							}
+							AnimationUtility.SetEditorCurve(animationClip, curveBinding, curve);
+						}
+					}
+					
+					MoveVRChatConstraint(vrcComponents[j], targetObject.gameObject);
+				}
+				
 				GameObject damping = null;
 				if (addDampeningConstraint)
 				{
 					damping = new GameObject($"{targetSyncObject.name} Damping Sync");
 					damping.transform.parent = syncSystem.transform;
-					ParentConstraint targetConstraint = targetSyncObject.AddComponent<ParentConstraint>();
-					targetConstraint.locked = true;
-					targetConstraint.constraintActive = true;
-					targetConstraint.AddSource(new ConstraintSource()
-					{
-						sourceTransform = damping.transform, weight = 1
-					});
-					targetConstraint.AddSource(new ConstraintSource()
-					{
-						sourceTransform = targetSyncObject.transform, weight = 0f
-					});
+					VRCParentConstraint targetConstraint = targetSyncObject.AddComponent<VRCParentConstraint>();
+					targetConstraint.Locked = true;
+					targetConstraint.IsActive = true;
+					targetConstraint.Sources.Add(new VRCConstraintSource(damping.transform, 1f, Vector3.zero, Vector3.zero));
+					targetConstraint.Sources.Add(new VRCConstraintSource(targetSyncObject.transform, 0f, Vector3.zero, Vector3.zero));
 				}
 				
-				ParentConstraint containerConstraint = addDampeningConstraint ? damping.AddComponent<ParentConstraint>() : targetSyncObject.AddComponent<ParentConstraint>();
-				containerConstraint.AddSource(new ConstraintSource()
-				{
-					sourceTransform = targetObject, weight = 1
-				});
-				containerConstraint.AddSource(new ConstraintSource()
-				{
-					sourceTransform = syncSystem.transform.Find("Set/Result"), weight = 0f
-				});
-				containerConstraint.locked = true;
-				containerConstraint.constraintActive = true;
+				VRCParentConstraint containerConstraint = addDampeningConstraint ? damping.AddComponent<VRCParentConstraint>() : targetSyncObject.AddComponent<VRCParentConstraint>();
+				containerConstraint.Sources.Add((new VRCConstraintSource(targetObject, 1f, Vector3.zero, Vector3.zero)));
+				containerConstraint.Sources.Add((new VRCConstraintSource(syncSystem.transform.Find("Set/Result"), 0f, Vector3.zero, Vector3.zero)));
+				containerConstraint.Locked = true;
+				containerConstraint.IsActive = true;
 				
-				ScaleConstraint scaleConstraint = targetSyncObject.gameObject.AddComponent<ScaleConstraint>();
-				scaleConstraint.AddSource(new ConstraintSource(){sourceTransform = targetObject, weight = 1});
-				scaleConstraint.locked = true;
-				scaleConstraint.constraintActive = true;
+				VRCScaleConstraint VRCScaleConstraint = targetSyncObject.gameObject.AddComponent<VRCScaleConstraint>();
+				VRCScaleConstraint.Sources.Add(new VRCConstraintSource(targetObject, 1f, Vector3.zero, Vector3.zero));
+				VRCScaleConstraint.Locked = true;
+				VRCScaleConstraint.IsActive = true;
 			}
 			Transform setTransform = syncSystem.transform.Find("Set");
 			Transform measureTransform = syncSystem.transform.Find("Measure");
@@ -987,34 +1017,28 @@ namespace VRLabs.CustomObjectSyncCreator
 
 
 			Transform contactx = measureTransform.Find("Position/SenderX");
-			contactx.GetComponent<PositionConstraint>().translationOffset = new Vector3(contactBugOffset / Mathf.Pow(2, maxRadius) * 3, 0, 0);
+			contactx.GetComponent<VRCPositionConstraint>().PositionOffset = new Vector3(contactBugOffset / Mathf.Pow(2, maxRadius) * 3, 0, 0);
 			Transform contacty = measureTransform.Find("Position/SenderY");
-			contacty.GetComponent<PositionConstraint>().translationOffset = new Vector3(0, contactBugOffset / Mathf.Pow(2, maxRadius) * 3, 0);
+			contacty.GetComponent<VRCPositionConstraint>().PositionOffset = new Vector3(0, contactBugOffset / Mathf.Pow(2, maxRadius) * 3, 0);
 			Transform contactz = measureTransform.Find("Position/SenderZ");
-			contactz.GetComponent<PositionConstraint>().translationOffset = new Vector3(0, 0, contactBugOffset / Mathf.Pow(2, maxRadius) * 3);
+			contactz.GetComponent<VRCPositionConstraint>().PositionOffset = new Vector3(0, 0, contactBugOffset / Mathf.Pow(2, maxRadius) * 3);
 
 			
 			setTransform.localPosition = new Vector3(-contactBugOffset, -contactBugOffset, -contactBugOffset);
 			if (centeredOnAvatar || quickSync)
 			{
-				PositionConstraint setConstraint = setTransform.gameObject.AddComponent<PositionConstraint>();
-				PositionConstraint measureConstraint = measureTransform.gameObject.AddComponent<PositionConstraint>();
-				setConstraint.AddSource(new ConstraintSource()
-				{
-					sourceTransform = descriptor.transform, weight = 1f
-				});
-				measureConstraint.AddSource(new ConstraintSource()
-				{
-					sourceTransform = descriptor.transform, weight = 1f
-				});
-				setConstraint.translationAtRest = Vector3.zero;
-				setConstraint.translationOffset = new Vector3(-contactBugOffset, -contactBugOffset, -contactBugOffset);
-				setConstraint.locked = true;
-				setConstraint.constraintActive = true;
-				measureConstraint.translationAtRest = Vector3.zero;
-				measureConstraint.translationOffset = Vector3.zero;
-				measureConstraint.locked = true;
-				measureConstraint.constraintActive = true;
+				VRCPositionConstraint setConstraint = setTransform.gameObject.AddComponent<VRCPositionConstraint>();
+				VRCPositionConstraint measureConstraint = measureTransform.gameObject.AddComponent<VRCPositionConstraint>();
+				setConstraint.Sources.Add(new VRCConstraintSource(descriptor.transform, 1f, Vector3.zero, Vector3.zero));
+				measureConstraint.Sources.Add(new VRCConstraintSource(descriptor.transform, 1f, Vector3.zero, Vector3.zero));
+				setConstraint.PositionAtRest = Vector3.zero;
+				setConstraint.PositionOffset = new Vector3(-contactBugOffset, -contactBugOffset, -contactBugOffset);
+				setConstraint.Locked = true;
+				setConstraint.IsActive = true;
+				measureConstraint.PositionAtRest = Vector3.zero;
+				measureConstraint.PositionOffset = Vector3.zero;
+				measureConstraint.Locked = true;
+				measureConstraint.IsActive = true;
 			}
 			
 			VRCAvatarDescriptor.CustomAnimLayer[] layers = descriptor.baseAnimationLayers;
@@ -1039,16 +1063,16 @@ namespace VRLabs.CustomObjectSyncCreator
 			AnimatorControllerLayer syncLayer = GenerateLayer("CustomObjectSync/Sync", syncMachine);
 
 			AnimationClip bufferWaitInit = GenerateClip($"BufferWait{(int)(syncSteps*1.5f)}");
-			AddCurve(bufferWaitInit, "Custom Object Sync/Measure", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, ((Math.Max(positionBits, rotationBits)*1.5f))/60f, 0));
-			AddCurve(bufferWaitInit, "Custom Object Sync/Set", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, ((Math.Max(positionBits, rotationBits)*1.5f))/60f, 0));
+			AddCurve(bufferWaitInit, "Custom Object Sync/Measure", typeof(VRCPositionConstraint), "m_Enabled", AnimationCurve.Constant(0, ((Math.Max(positionBits, rotationBits)*1.5f))/60f, 0));
+			AddCurve(bufferWaitInit, "Custom Object Sync/Set", typeof(VRCPositionConstraint), "m_Enabled", AnimationCurve.Constant(0, ((Math.Max(positionBits, rotationBits)*1.5f))/60f, 0));
 
 			AnimationClip bufferWaitSync = GenerateClip($"BufferWaitSync");
-			AddCurve(bufferWaitSync, "Custom Object Sync/Measure", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 12/60f, 0));
-			AddCurve(bufferWaitSync, "Custom Object Sync/Set", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 12/60f, 0));
+			AddCurve(bufferWaitSync, "Custom Object Sync/Measure", typeof(VRCPositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 12/60f, 0));
+			AddCurve(bufferWaitSync, "Custom Object Sync/Set", typeof(VRCPositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 12/60f, 0));
 			
 			AnimationClip enableWorldConstraint = GenerateClip($"EnableWorldConstraint");
-			AddCurve(enableWorldConstraint, "Custom Object Sync/Measure", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 12/60f, 1));
-			AddCurve(enableWorldConstraint, "Custom Object Sync/Set", typeof(PositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 12/60f, 1));
+			AddCurve(enableWorldConstraint, "Custom Object Sync/Measure", typeof(VRCPositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 12/60f, 1));
+			AddCurve(enableWorldConstraint, "Custom Object Sync/Set", typeof(VRCPositionConstraint), "m_Enabled", AnimationCurve.Constant(0, 12/60f, 1));
 			
 			#region SyncStates
 			ChildAnimatorState initState = GenerateChildState(new Vector3(-100, -150, 0), GenerateState("SyncInit", motion: enableWorldConstraint));
@@ -1598,9 +1622,9 @@ namespace VRLabs.CustomObjectSyncCreator
 					RenameClipPaths(allClips, false, oldPath, newPath);
 						
 						
-					if (userObject.GetComponent<ParentConstraint>() != null)
+					if (userObject.GetComponent<VRCParentConstraint>() != null)
 					{
-						DestroyImmediate(userObject.GetComponent<ParentConstraint>());
+						DestroyImmediate(userObject.GetComponent<VRCParentConstraint>());
 					}
 				}
 				
@@ -1610,29 +1634,29 @@ namespace VRLabs.CustomObjectSyncCreator
 				foreach (Transform userObject in userObjects)
 				{
 					if(userObject == null) continue;
-					ParentConstraint targetConstraint = userObject.GetComponent<ParentConstraint>();
+					VRCParentConstraint targetConstraint = userObject.GetComponent<VRCParentConstraint>();
 					if (targetConstraint == null)
 					{
 						CantFindTarget(userObject);
 						continue;
 					}
-					Transform dampingObj = targetConstraint.GetSource(0).sourceTransform;
+					Transform dampingObj = targetConstraint.Sources[0].SourceTransform;
 					if (dampingObj == null)
 					{
 						CantFindTarget(userObject);
 						continue;
 					};
 					
-					ParentConstraint parentConstraint = dampingObj.gameObject.GetComponent<ParentConstraint>();
-					if (parentConstraint != null && parentConstraint.sourceCount == 2 && parentConstraint.GetSource(1).sourceTransform != null &&
-					    parentConstraint.GetSource(1).sourceTransform == prefab.transform.Find("Set/Result"))
+					VRCParentConstraint VRCParentConstraint = dampingObj.gameObject.GetComponent<VRCParentConstraint>();
+					if (VRCParentConstraint != null && VRCParentConstraint.Sources.Count == 2 && VRCParentConstraint.Sources[1].SourceTransform != null &&
+					    VRCParentConstraint.Sources[1].SourceTransform == prefab.transform.Find("Set/Result"))
 					{
-						targetConstraint = parentConstraint;
+						targetConstraint = VRCParentConstraint;
 					}
 
-					Transform target = Enumerable.Range(0, targetConstraint.sourceCount)
-							.Select(x => targetConstraint.GetSource(x)).Where(x => x.sourceTransform != null && x.sourceTransform.name.EndsWith("Target"))
-							.Select(x => x.sourceTransform).FirstOrDefault();
+					Transform target = Enumerable.Range(0, targetConstraint.Sources.Count)
+							.Select(x => targetConstraint.Sources[x]).Where(x => x.SourceTransform != null && x.SourceTransform.name.EndsWith("Target"))
+							.Select(x => x.SourceTransform).FirstOrDefault();
 					
 					if (target == null)
 					{
@@ -1653,15 +1677,16 @@ namespace VRLabs.CustomObjectSyncCreator
 						.ToArray();
 					RenameClipPaths(allClips, false, oldPath, newPath);
 						
-					if (userObject.GetComponent<ParentConstraint>() != null)
+					if (userObject.GetComponent<VRCParentConstraint>() != null)
 					{
-						DestroyImmediate(userObject.GetComponent<ParentConstraint>());
+						DestroyImmediate(userObject.GetComponent<VRCParentConstraint>());
 					}
-					if (userObject.GetComponent<ScaleConstraint>() != null)
+					if (userObject.GetComponent<VRCScaleConstraint>() != null)
 					{
-						DestroyImmediate(userObject.GetComponent<ScaleConstraint>());
+						DestroyImmediate(userObject.GetComponent<VRCScaleConstraint>());
 					}
 					
+					// Unity Constraints
 					var components = target.GetComponents<IConstraint>();
 					string targetPath = GetDescriptorPath(target);
 					for (var j = 0; j < components.Length; j++)
@@ -1686,6 +1711,33 @@ namespace VRLabs.CustomObjectSyncCreator
 							}
 						}
 						MoveConstraint(components[j], userObject.gameObject);
+					}
+					
+					// VRChat Constraints
+					var vrcComponents = target.GetComponents<VRCConstraintBase>();
+					string vrcTargetPath = GetDescriptorPath(target);
+					for (var j = 0; j < vrcComponents.Length; j++)
+					{
+						// Move constraint animations to the new path.
+						AnimationClip[] targetClips = allClips.Where(x =>
+							AnimationUtility.GetCurveBindings(x)
+								.Any(y => y.type == vrcComponents[j].GetType() && y.path == vrcTargetPath)).ToArray();
+						foreach (AnimationClip animationClip in targetClips)
+						{
+							EditorCurveBinding[] curveBindings = AnimationUtility.GetCurveBindings(animationClip);
+							for (var bi = 0; bi < curveBindings.Length; bi++)
+							{
+								var curveBinding = curveBindings[bi];
+								AnimationCurve curve = AnimationUtility.GetEditorCurve(animationClip, curveBinding);
+								AnimationUtility.SetEditorCurve(animationClip, curveBinding, null);
+								if (curveBinding.type == vrcComponents[j].GetType() && curveBinding.path == vrcTargetPath)
+								{
+									curveBinding.path = newPath;
+								}
+								AnimationUtility.SetEditorCurve(animationClip, curveBinding, curve);
+							}
+						}
+						MoveVRChatConstraint(vrcComponents[j], userObject.gameObject);
 					}
 						
 					DestroyImmediate(target.gameObject);
@@ -1779,7 +1831,7 @@ namespace VRLabs.CustomObjectSyncCreator
                         {
                             ObjectReferenceKeyframe[] objectCurve = AnimationUtility.GetObjectReferenceCurve(clip, binding);
 
-                            if (!replaceEntire && binding.path.Contains(oldPath))
+                            if (!replaceEntire && binding.path.StartsWith(oldPath))
                             {
                                 AnimationUtility.SetObjectReferenceCurve(clip, binding, null);
                                 binding.path = binding.path.Replace(oldPath, newPath);
@@ -1797,7 +1849,7 @@ namespace VRLabs.CustomObjectSyncCreator
                         {
                             AnimationCurve floatCurve = AnimationUtility.GetEditorCurve(clip, binding);
 
-                            if (!replaceEntire && binding.path.Contains(oldPath))
+                            if (!replaceEntire && binding.path.StartsWith(oldPath))
                             {
                                 AnimationUtility.SetEditorCurve(clip, binding, null);
                                 binding.path = binding.path.Replace(oldPath, newPath);
