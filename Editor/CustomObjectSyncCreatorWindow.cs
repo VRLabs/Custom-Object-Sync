@@ -229,7 +229,10 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			using (new HorizontalScope(GUI.skin.box))
 			{
-				creator.rotationEnabled = GUILayout.Toggle(creator.rotationEnabled, "Enable Rotation Sync");
+				GUILayout.Label("Enable Rotation Sync:", GUILayout.ExpandWidth(false));
+				creator.syncRotationX = GUILayout.Toggle(creator.syncRotationX, "X");
+				creator.syncRotationY = GUILayout.Toggle(creator.syncRotationY, "Y");
+				creator.syncRotationZ = GUILayout.Toggle(creator.syncRotationZ, "Z");
 			}
 
 			GUILayout.Space(2);
@@ -322,19 +325,25 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			GUILayout.Space(2);
 
-			using (new HorizontalScope(GUI.skin.box))
+			using (new VerticalScope(GUI.skin.box))
 			{
-				creator.rotationEnabled = GUILayout.Toggle(creator.rotationEnabled, "Enable Rotation Sync");
-				creator.centeredOnAvatar = EditorGUILayout.Popup(new GUIContent("Sync Type", 
+				using (new HorizontalScope())
+				{
+					GUILayout.Label("Enable Rotation Sync:", GUILayout.ExpandWidth(false));
+					creator.syncRotationX = GUILayout.Toggle(creator.syncRotationX, "X");
+					creator.syncRotationY = GUILayout.Toggle(creator.syncRotationY, "Y");
+					creator.syncRotationZ = GUILayout.Toggle(creator.syncRotationZ, "Z");
+				}
+				creator.centeredOnAvatar = EditorGUILayout.Popup(new GUIContent("Sync Type",
 						"Avatar Centered drops the sync point at the avatar's base when enabling sync. This means radius can be way lower, but it is not late join synced.\n" +
-						"World Centered syncs from world origin, which means larger radius is required, but it is late join synced."), (creator.centeredOnAvatar ? 1 : 0), 
+						"World Centered syncs from world origin, which means larger radius is required, but it is late join synced."), (creator.centeredOnAvatar ? 1 : 0),
 					new GUIContent[]
 					{
 						new GUIContent("World Centered", "Syncs from world origin, which means larger radius is required, but it is late join synced."),
 						new GUIContent("Avatar Centered", "Drops the sync point at the avatar's base when enabling sync. This means radius can be way lower, but it is not late join synced.")
-					} ) == 1;
+					}) == 1;
 			}
-
+			
 			GUILayout.Space(2);
 
 			using (new HorizontalScope(GUI.skin.box))

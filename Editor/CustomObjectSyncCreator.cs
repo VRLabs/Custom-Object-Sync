@@ -28,8 +28,11 @@ namespace VRLabs.CustomObjectSyncCreator
 		public int maxRadius = 7;
 		public int positionPrecision = 6;
 		public int rotationPrecision = 8;
-		public bool rotationEnabled = true;
 		public bool centeredOnAvatar = false;
+		public bool syncRotationX = true;
+		public bool syncRotationY = true;
+		public bool syncRotationZ = true;
+		public bool rotationEnabled => syncRotationX || syncRotationY || syncRotationZ;
 		public bool addDampeningConstraint = false;
 		public bool useMultipleObjects = false;
 		public GameObject[] syncObjects;
@@ -84,6 +87,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			bool[][] syncStepPerms = GeneratePermutations(syncStepParameterCount);
 			int objectCount = syncObjects.Count(x => x != null);
 			int objectParameterCount = Mathf.CeilToInt(Mathf.Log(objectCount, 2));
+			string[] activeRotationAxes = new[] { "X", "Y", "Z" }.Where((axis, i) => (i == 0 && syncRotationX) || (i == 1 && syncRotationY) || (i == 2 && syncRotationZ)).ToArray();
 			bool[][] objectPerms = GeneratePermutations(objectParameterCount);
 			
 			#region Resource Setup
@@ -170,15 +174,6 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				GenerateBoolParameter("IsLocal"),
 				GenerateFloatParameter("CustomObjectSync/One", defaultFloat: 1f),
-				GenerateFloatParameter("CustomObjectSync/AngleMagX_Angle"),
-				GenerateFloatParameter("CustomObjectSync/AngleMagY_Angle"),
-				GenerateFloatParameter("CustomObjectSync/AngleMagZ_Angle"),
-				GenerateFloatParameter("CustomObjectSync/AngleSignX_Angle"),
-				GenerateFloatParameter("CustomObjectSync/AngleSignY_Angle"),
-				GenerateFloatParameter("CustomObjectSync/AngleSignZ_Angle"),
-				GenerateFloatParameter("CustomObjectSync/RotationX"),
-				GenerateFloatParameter("CustomObjectSync/RotationY"),
-				GenerateFloatParameter("CustomObjectSync/RotationZ"),
 				GenerateFloatParameter("CustomObjectSync/PositionX"),
 				GenerateFloatParameter("CustomObjectSync/PositionY"),
 				GenerateFloatParameter("CustomObjectSync/PositionZ"),
@@ -194,6 +189,11 @@ namespace VRLabs.CustomObjectSyncCreator
 				GenerateBoolParameter("CustomObjectSync/SetStage"),
 				GenerateBoolParameter("CustomObjectSync/Enabled")
 			};
+
+			parameters.AddRange(activeRotationAxes.Select(x => GenerateFloatParameter($"CustomObjectSync/AngleMag{x}_Angle")));
+			parameters.AddRange(activeRotationAxes.Select(x => GenerateFloatParameter($"CustomObjectSync/AngleSign{x}_Angle")));
+			parameters.AddRange(activeRotationAxes.Select(x => GenerateFloatParameter($"CustomObjectSync/Rotation{x}")));
+
 
 
 			if (!quickSync)
@@ -218,8 +218,8 @@ namespace VRLabs.CustomObjectSyncCreator
 				}
 				if (rotationEnabled)
 				{
-					parameters = parameters.Concat(axis.Select(x => GenerateFloatParameter($"CustomObjectSync/LocalDebugView/Rotation{x}", 0f))).ToList();
-					parameters = parameters.Concat(axis.Select(x => GenerateIntParameter($"CustomObjectSync/LocalDebugView/RotationTmp{x}", 0))).ToList();	
+					parameters = parameters.Concat(activeRotationAxes.Select(x => GenerateFloatParameter($"CustomObjectSync/LocalDebugView/Rotation{x}", 0f))).ToList();
+					parameters = parameters.Concat(activeRotationAxes.Select(x => GenerateIntParameter($"CustomObjectSync/LocalDebugView/RotationTmp{x}", 0))).ToList();	
 				}
 			}
 			
@@ -239,7 +239,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				parameterList = parameterList.Concat(axis.Select(x => GenerateVRCParameter($"CustomObjectSync/Sync/PositionSign{x}", VRCExpressionParameters.ValueType.Bool))).ToList();
 				if (rotationEnabled)
 				{
-					parameterList = parameterList.Concat(axis.Select(x => GenerateVRCParameter($"CustomObjectSync/Sync/Rotation{x}", VRCExpressionParameters.ValueType.Float))).ToList();
+					parameterList = parameterList.Concat(activeRotationAxes.Select(x => GenerateVRCParameter($"CustomObjectSync/Sync/Rotation{x}", VRCExpressionParameters.ValueType.Float))).ToList();
 				}
 			}
 			else
@@ -308,7 +308,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			layersToAdd.Add(syncLayer);
 			
 			AnimatorControllerLayer displayLayer = SetupDisplayLayer(descriptor, objectCount, syncSystem, buffer, objectParameterCount, objectPerms);
-			layersToAdd.Add(displayLayer);
+ 			layersToAdd.Add(displayLayer);
 
 			if (addLocalDebugView)
 			{
@@ -431,8 +431,9 @@ namespace VRLabs.CustomObjectSyncCreator
 				AnimatorState stateRot = GenerateState($"X{(perm[0] ? "+" : "-")}Y{(perm[1] ? "+" : "-")}Z{(perm[2] ? "+" : "-")}Rot", motion: localEnableTree, writeDefaultValues: true);
 				stateRot.behaviours = new StateMachineBehaviour[] {
 					GenerateParameterDriver(
-						Enumerable.Range(0, axis.Length).Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/AngleMag{axis[x]}_Angle", name: $"CustomObjectSync/Rotation{axis[x]}",
-							convertRange: true, destMax: perm[x] ? 1f : 0f, destMin: 0.5f, sourceMax: 1f) 
+						Enumerable.Range(0, axis.Length).Select((x, i) => new { x, i }).Where(x => (x.i == 0 && syncRotationX) || (x.i == 1 && syncRotationY) || (x.i == 2 && syncRotationZ))
+							.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/AngleMag{axis[x.x]}_Angle", name: $"CustomObjectSync/Rotation{axis[x.x]}",
+							convertRange: true, destMax: perm[x.x] ? 1f : 0f, destMin: 0.5f, sourceMax: 1f) 
 						).Append(GenerateParameter(ChangeType.Set, name: "CustomObjectSync/SetStage", value: 1f)).ToArray())
 				};
 				displayStates.Add(GenerateChildState(new Vector3(-220f, -210f + 60 * p, 0f), stateRot));
@@ -549,9 +550,10 @@ namespace VRLabs.CustomObjectSyncCreator
 				bool[] perm = axisPermutations[p];
 				anyStateTransitions.Add(
 					GenerateTransition("", canTransitionToSelf: true, conditions:
-						Enumerable.Range(0, axis.Length).Select(x =>
-								GenerateCondition(perm[x] ? AnimatorConditionMode.Less : AnimatorConditionMode.Greater,
-									$"CustomObjectSync/AngleSign{axis[x]}_Angle", perm[x] ? 0.5000001f : 0.5f))
+						Enumerable.Range(0, axis.Length).Select((x, i) => new { x, i }).Where(x => (x.i == 0 && syncRotationX) || (x.i == 1 && syncRotationY) || (x.i == 2 && syncRotationZ))
+							.Select(x =>
+								GenerateCondition(perm[x.x] ? AnimatorConditionMode.Less : AnimatorConditionMode.Greater,
+									$"CustomObjectSync/AngleSign{axis[x.x]}_Angle", perm[x.x] ? 0.5000001f : 0.5f))
 							.Append(GenerateCondition(AnimatorConditionMode.If, "IsLocal", 0f))
 							.Append(GenerateCondition(AnimatorConditionMode.IfNot, "CustomObjectSync/SetStage", 0f)).ToArray()
 						, destinationState: displayStates[2 * p].state)
@@ -587,7 +589,8 @@ namespace VRLabs.CustomObjectSyncCreator
 		{
 			BlendTree tree = GenerateBlendTree("RemoteTree", BlendTreeType.Direct);
 
-			BlendTree[] localTrees = axis.Select(x =>
+			string[] activeRotationAxes = new[] { "X", "Y", "Z" }.Where((axisName, i) => (i == 0 && syncRotationX) || (i == 1 && syncRotationY) || (i == 2 && syncRotationZ)).ToArray();
+			BlendTree[] rotationTrees = activeRotationAxes.Select(x =>
 			{
 				AnimationClip rotationXMin = GenerateClip($"Rotation{x}Min");
 				AddCurve(rotationXMin, "Custom Object Sync/Set/Result", typeof(VRCRotationConstraint), $"RotationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, isDebugTree ? -180 : -180 - (360 / (float)Math.Pow(2, rotationPrecision)))) ;
@@ -595,7 +598,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				AddCurve(rotationXMax, "Custom Object Sync/Set/Result", typeof(VRCRotationConstraint), $"RotationOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, isDebugTree ? 180 : 180 - (360 / (float)Math.Pow(2, rotationPrecision))));
 				BlendTree rotationTree = GenerateBlendTree($"Rotation{x}", BlendTreeType.Simple1D,
 					blendParameter: isDebugTree ? $"CustomObjectSync/LocalDebugView/Rotation{x}" : $"CustomObjectSync/Rotation{x}");
-				rotationTree.children = new ChildMotion[]
+ 				rotationTree.children = new ChildMotion[]
 				{
 					GenerateChildMotion(motion: rotationXMin),
 					GenerateChildMotion(motion: rotationXMax)
@@ -604,9 +607,10 @@ namespace VRLabs.CustomObjectSyncCreator
 			}).ToArray();
 			
 			
+			BlendTree[] positionTrees;
 			if (quickSync)
 			{
-				localTrees = localTrees.Concat(axis.Select(x =>
+				positionTrees = axis.Select(x =>
 				{
 					float value = Mathf.Pow(2, maxRadius);
 					float offset = 1 / Mathf.Pow(2, positionPrecision + 1);
@@ -638,11 +642,11 @@ namespace VRLabs.CustomObjectSyncCreator
 						GenerateChildMotion(translationMaxTree)
 					};
 					return translationTree;
-				})).ToArray();
-			}
+				}).ToArray();
+ 			}
 			else
 			{
-				localTrees = localTrees.Concat(axis.Select(x =>
+				positionTrees = axis.Select(x =>
 				{
 					AnimationClip translationMin = GenerateClip($"Translation{x}Min");
 					AddCurve(translationMin, "Custom Object Sync/Set/Result", typeof(VRCPositionConstraint), $"PositionOffset.{x.ToLower()}", AnimationCurve.Constant(0, 1/60f, -Mathf.Pow(2, maxRadius)));
@@ -656,10 +660,10 @@ namespace VRLabs.CustomObjectSyncCreator
 						GenerateChildMotion(motion: translationMax)
 					};
 					return translationTree;
-				})).ToArray();
-			}
+				}).ToArray();
+ 			}
 			
-			tree.children = localTrees.Select(x => GenerateChildMotion(motion: x, directBlendParameter: "CustomObjectSync/One")).ToArray();
+			tree.children = rotationTrees.Concat(positionTrees).Select(x => GenerateChildMotion(motion: x, directBlendParameter: "CustomObjectSync/One")).ToArray();
 			return tree;
 		}
 
@@ -732,7 +736,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					.Select(i2 =>
 					{
 						return GenerateChildMotion(motion: ((i2 + 1) % objectCount) == i ? constraintsEnabled[i2] : constraintsDisabled[i2], directBlendParameter: "CustomObjectSync/One");
-					}).Append(GenerateChildMotion(motion: setPositionTree, directBlendParameter: "CustomObjectSync/One")).ToArray();
+					}).Concat(rotationEnabled ? new [] {GenerateChildMotion(motion: setPositionTree, directBlendParameter: "CustomObjectSync/One")} : new ChildMotion[0]).ToArray();
 				
 				AnimatorState localState = GenerateState($"Local Object {i}", motion: localTree, writeDefaultValues: true);
 				localState.behaviours = new StateMachineBehaviour[] {
@@ -765,10 +769,14 @@ namespace VRLabs.CustomObjectSyncCreator
 						}
 						if (rotationEnabled)
 						{
-							Parameter rot1 = GenerateParameter(ChangeType.Copy, name: $"CustomObjectSync/LocalDebugView/RotationTmp{x}", source: $"CustomObjectSync/Rotation{x}", convertRange: true, sourceMin: -1, sourceMax: 1, destMin: -(float)Math.Pow(2, rotationPrecision), destMax: (float)Math.Pow(2, rotationPrecision));
-							Parameter rot2 = GenerateParameter(ChangeType.Copy, name: $"CustomObjectSync/LocalDebugView/Rotation{x}", source: $"CustomObjectSync/LocalDebugView/RotationTmp{x}", convertRange: true, sourceMin: -(float)Math.Pow(2, rotationPrecision), sourceMax: (float)Math.Pow(2, rotationPrecision),  destMin: -1, destMax: 1);
-							parameters.Add(rot1);
-							parameters.Add(rot2);
+							string[] activeRotationAxes = new[] { "X", "Y", "Z" }.Where((axisName, i) => (i == 0 && syncRotationX) || (i == 1 && syncRotationY) || (i == 2 && syncRotationZ)).ToArray();
+							if(activeRotationAxes.Contains(x))
+							{
+								Parameter rot1 = GenerateParameter(ChangeType.Copy, name: $"CustomObjectSync/LocalDebugView/RotationTmp{x}", source: $"CustomObjectSync/Rotation{x}", convertRange: true, sourceMin: -1, sourceMax: 1, destMin: -(float)Math.Pow(2, rotationPrecision), destMax: (float)Math.Pow(2, rotationPrecision));
+								Parameter rot2 = GenerateParameter(ChangeType.Copy, name: $"CustomObjectSync/LocalDebugView/Rotation{x}", source: $"CustomObjectSync/LocalDebugView/RotationTmp{x}", convertRange: true, sourceMin: -(float)Math.Pow(2, rotationPrecision), sourceMax: (float)Math.Pow(2, rotationPrecision),  destMin: -1, destMax: 1);
+								parameters.Add(rot1);
+								parameters.Add(rot2);
+							}
 						}
 						return parameters.ToArray();
 					}).ToArray())		
@@ -890,11 +898,6 @@ namespace VRLabs.CustomObjectSyncCreator
 			GameObject rootObject = descriptor.gameObject;
 			GameObject syncSystem = Instantiate(resourcePrefab, rootObject.transform);
 			syncSystem.name = syncSystem.name.Replace("(Clone)", "");
-			if (!rotationEnabled)
-			{
-				DestroyImmediate(syncSystem.transform.Find("Measure/Rotation").gameObject);
-				DestroyImmediate(syncSystem.transform.Find("Set/Result").GetComponent<RotationConstraint>());
-			}
 
 			foreach (string s in axis)
 			{
@@ -909,6 +912,34 @@ namespace VRLabs.CustomObjectSyncCreator
 				source1.Weight = 3f / (radius);
 				sendConstraint.Sources[1] = source1;
 			}
+			
+			if (!rotationEnabled)
+			{
+				DestroyImmediate(syncSystem.transform.Find("Measure/Rotation").gameObject);
+			}
+			else
+			{
+				if (!syncRotationX)
+				{
+					DestroyImmediate(syncSystem.transform.Find("Measure/Rotation/Measure Bones/Measure X Magnitude").gameObject);
+					DestroyImmediate(syncSystem.transform.Find("Measure/Rotation/Measure Bones/Measure X Sign").gameObject);
+					DestroyImmediate(syncSystem.transform.Find("Measure/Rotation/Measure Planes/X Angle Plane").gameObject);
+				}
+				if (!syncRotationY)
+				{
+					DestroyImmediate(syncSystem.transform.Find("Measure/Rotation/Measure Bones/Measure Y Magnitude").gameObject);
+					DestroyImmediate(syncSystem.transform.Find("Measure/Rotation/Measure Bones/Measure Y Sign").gameObject);
+					DestroyImmediate(syncSystem.transform.Find("Measure/Rotation/Measure Planes/Y Angle Plane").gameObject);
+				}
+				if (!syncRotationZ)
+				{
+					DestroyImmediate(syncSystem.transform.Find("Measure/Rotation/Measure Bones/Measure Z Magnitude").gameObject);
+					DestroyImmediate(syncSystem.transform.Find("Measure/Rotation/Measure Bones/Measure Z Sign").gameObject);
+					DestroyImmediate(syncSystem.transform.Find("Measure/Rotation/Measure Planes/Z Angle Plane").gameObject);
+				}
+			}
+
+			var vrcRotationConstraint = syncSystem.transform.Find("Set/Result").GetComponent<VRCRotationConstraint>();
 
 			Transform mainTargetObject = syncSystem.transform.Find("Target");
 			VRCParentConstraint mainTargetVRCParentConstraint = mainTargetObject.gameObject.AddComponent<VRCParentConstraint>();
@@ -1080,16 +1111,16 @@ namespace VRLabs.CustomObjectSyncCreator
 			List<ChildAnimatorState> remoteStates = new List<ChildAnimatorState>();
 			if (quickSync)
 			{
-				string[] syncParameterNames = axis.Select(x => $"Position{x}").Concat(axis.Select(x => $"PositionSign{x}")).ToArray();
-				if (rotationEnabled)
-				{
-					syncParameterNames = syncParameterNames.Concat(axis.Select(x => $"Rotation{x}")).ToArray();
-				}
+				string[] activeRotationAxes = new[] { "X", "Y", "Z" }.Where((axisName, i) => (i == 0 && syncRotationX) || (i == 1 && syncRotationY) || (i == 2 && syncRotationZ)).ToArray();
+
+				string[] syncParameterNames = axis.Select(x => $"Position{x}")
+					.Concat(axis.Select(x => $"PositionSign{x}"))
+					.Concat(activeRotationAxes.Select(x => $"Rotation{x}")).ToArray();
 				for (int o = 0; o < objectCount; o++)
 				{
 					localStates.Add(GenerateChildState(new Vector3(-500,-(objectCount) * 25 + ((o + 1) * 50), 0), GenerateState($"SyncLocal{o}", motion: bufferWaitSync)));
 					localStates.Add(GenerateChildState(new Vector3(-800, -(objectCount) * 25 + ((o + 1) * 50), 0), GenerateState($"SyncLocal{o}Buffer", motion: bufferWaitSync)));
-					localStates.Last().state.behaviours = new[]
+ 					localStates.Last().state.behaviours = new[]
 					{
 						GenerateParameterDriver(Enumerable.Range(0, objectParameterCount).Select(x => GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Sync/Object{x}", value: objectPerms[(o + 1) % objectCount][x] ? 1 : 0)).ToArray()),
 						GenerateParameterDriver(syncParameterNames.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/{x}", name: $"CustomObjectSync/Sync/{x}")).ToArray()),
@@ -1097,7 +1128,7 @@ namespace VRLabs.CustomObjectSyncCreator
 					};
 					
 					remoteStates.Add(GenerateChildState(new Vector3(300, -(objectCount) * 25 + ((o + 1) * 50), 0), GenerateState($"SyncRemote{o}")));
-					remoteStates.Last().state.behaviours = new[]
+ 					remoteStates.Last().state.behaviours = new[]
 					{
 						GenerateParameterDriver(syncParameterNames.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Sync/{x}", name: $"CustomObjectSync/{x}")).ToArray())
 					};
@@ -1105,14 +1136,15 @@ namespace VRLabs.CustomObjectSyncCreator
 			}
 			else
 			{
+				string[] activeRotationAxes = new[] { "X", "Y", "Z" }.Where((axisName, i) => (i == 0 && syncRotationX) || (i == 1 && syncRotationY) || (i == 2 && syncRotationZ)).ToArray();
 				string[] syncParameterNames = axis
 				.SelectMany(n => Enumerable.Range(0, positionBits).Select(i => $"CustomObjectSync/Bits/Copy/Position{n}{i}"))
-				.Concat(axis.SelectMany(n =>
-					Enumerable.Range(0, rotationBits).Select(i => $"CustomObjectSync/Bits/Copy/Rotation{n}{i}"))).ToArray();
+				.Concat(activeRotationAxes.SelectMany(n =>
+					Enumerable.Range(0, rotationPrecision).Select(i => $"CustomObjectSync/Bits/Copy/Rotation{n}{i}"))).ToArray();
 				string[][] localSyncParameterNames = Enumerable.Range(0, objectCount).Select(o => axis
 					.SelectMany(n => Enumerable.Range(0, positionBits).Select(i => $"CustomObjectSync/Bits/Position{n}{i}/{o}"))
-					.Concat(axis.SelectMany(n =>
-						Enumerable.Range(0, rotationBits).Select(i => $"CustomObjectSync/Bits/Rotation{n}{i}/{o}"))).ToArray()).ToArray();
+					.Concat(activeRotationAxes.SelectMany(n =>
+						Enumerable.Range(0, rotationPrecision).Select(i => $"CustomObjectSync/Bits/Rotation{n}{i}/{o}"))).ToArray()).ToArray();
 
 				int stepToStartSync = Mathf.CeilToInt(Math.Max(positionBits, rotationBits)*1.5f / 12f);
 				bool shouldDelayFirst = (stepToStartSync > syncSteps);
@@ -1269,10 +1301,11 @@ namespace VRLabs.CustomObjectSyncCreator
 				syncParameters = syncParameters.Concat(axis.Select(x => GenerateFloatParameter($"CustomObjectSync/Sync/Position{x}"))).ToList();
 				syncParameters = syncParameters.Concat(axis.Select(x => GenerateBoolParameter($"CustomObjectSync/Sync/PositionSign{x}"))).ToList();
 				if (rotationEnabled)
-				{
-					syncParameters = syncParameters.Concat(axis.Select(x => GenerateFloatParameter($"CustomObjectSync/Sync/Rotation{x}"))).ToList();
-				}
-			}
+ 				{
+					string[] activeRotationAxes = new[] { "X", "Y", "Z" }.Where((axisName, i) => (i == 0 && syncRotationX) || (i == 1 && syncRotationY) || (i == 2 && syncRotationZ)).ToArray();
+					syncParameters = syncParameters.Concat(activeRotationAxes.Select(x => GenerateFloatParameter($"CustomObjectSync/Sync/Rotation{x}"))).ToList();
+ 				}
+ 			}
 			else
 			{
 				for (int i = 0; i < bitCount; i++)
@@ -1325,23 +1358,24 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			if (rotationEnabled)
 			{
-				for (int p = 0; p < axis.Length; p++)
+				string[] activeRotationAxes = new[] { "X", "Y", "Z" }.Where((axisName, i) => (i == 0 && syncRotationX) || (i == 1 && syncRotationY) || (i == 2 && syncRotationZ)).ToArray();
+				foreach (var activeAxis in activeRotationAxes)
 				{
-					for (int b = 0; b < rotationBits; b++)
+					for (int b = 0; b < rotationPrecision; b++)
 					{
-						parameters.Add(GenerateBoolParameter($"CustomObjectSync/Bits/Copy/Rotation{axis[p]}{b}"));
-					}				
+						parameters.Add(GenerateBoolParameter($"CustomObjectSync/Bits/Copy/Rotation{activeAxis}{b}"));
+					}
 				}
 
 				for (int o = 0; o < objectCount; o++)
 				{
-					for (int p = 0; p < axis.Length; p++)
+					foreach (var activeAxis in activeRotationAxes)
 					{
-						parameters.Add(GenerateFloatParameter($"CustomObjectSync/Temp/Rotation{axis[p]}/{o}"));
-						for (int b = 0; b < rotationBits; b++)
+						parameters.Add(GenerateFloatParameter($"CustomObjectSync/Temp/Rotation{activeAxis}/{o}"));
+						for (int b = 0; b < rotationPrecision; b++)
 						{
-							parameters.Add(GenerateBoolParameter($"CustomObjectSync/Bits/Rotation{axis[p]}{b}/{o}"));
-						}				
+							parameters.Add(GenerateBoolParameter($"CustomObjectSync/Bits/Rotation{activeAxis}{b}/{o}"));
+						}
 					}
 				}
 			}
@@ -1357,8 +1391,8 @@ namespace VRLabs.CustomObjectSyncCreator
 				AnimatorControllerLayer positionLayer = GenerateLayer($"CustomObjectSync/Position Bit Convert{o}", positionMachine);
 				ChildAnimatorState initialState = GenerateChildState(new Vector3(-100, 400, 0), GenerateState("Initial", motion: buffer));
 			
-				SetupAnimationControllerCopy("Position", o, buffer, initialState, positionMachine, positionBits, objectParameterCount, true, positionBits > rotationBits);
-				SetupAnimationControllerCopy("Position", o, buffer, initialState, positionMachine, positionBits, objectParameterCount, false, positionBits > rotationBits);
+				SetupAnimationControllerCopy("Position", o, buffer, initialState, positionMachine, positionBits, objectParameterCount, true, positionBits > GetRotationAxisCount() * rotationPrecision);
+				SetupAnimationControllerCopy("Position", o, buffer, initialState, positionMachine, positionBits, objectParameterCount, false, positionBits > GetRotationAxisCount() * rotationPrecision);
 				positionMachine.states = new[] { initialState }.Concat(positionMachine.states).ToArray();
 				positionMachine.defaultState = initialState.state;
 				bitLayers.Add(positionLayer);
@@ -1369,8 +1403,8 @@ namespace VRLabs.CustomObjectSyncCreator
 					AnimatorControllerLayer rotationLayer = GenerateLayer($"CustomObjectSync/Rotation Bit Convert{o}", rotationMachine);
 					ChildAnimatorState initialRotationState = GenerateChildState(new Vector3(-100, 400, 0), GenerateState("Initial", motion: buffer));
 
-					SetupAnimationControllerCopy("Rotation", o, buffer, initialRotationState, rotationMachine, rotationBits, objectParameterCount,  true, positionBits <= rotationBits);	
-					SetupAnimationControllerCopy("Rotation", o, buffer, initialRotationState, rotationMachine, rotationBits, objectParameterCount, false, positionBits <= rotationBits);	
+					SetupAnimationControllerCopy("Rotation", o, buffer, initialRotationState, rotationMachine, rotationPrecision, objectParameterCount,  true, positionBits <= GetRotationAxisCount() * rotationPrecision);	
+					SetupAnimationControllerCopy("Rotation", o, buffer, initialRotationState, rotationMachine, rotationPrecision, objectParameterCount, false, positionBits <= GetRotationAxisCount() * rotationPrecision);	
 					rotationMachine.states = new[] { initialRotationState }.Concat(rotationMachine.states).ToArray();
 					rotationMachine.defaultState = initialRotationState.state;
 					bitLayers.Add(rotationLayer);
@@ -1383,10 +1417,21 @@ namespace VRLabs.CustomObjectSyncCreator
 		private void SetupAnimationControllerCopy(string name, int o, AnimationClip buffer, ChildAnimatorState initialState,
 			AnimatorStateMachine machine, int bits, int objectBits, bool read, bool copyBoth)
 		{
-			bool[][] permutations = GeneratePermutations(3);
+			string[] activeAxes;
+			if (name == "Rotation")
+			{
+				activeAxes = new[] { "X", "Y", "Z" }.Where((axisName, i) => (i == 0 && syncRotationX) || (i == 1 && syncRotationY) || (i == 2 && syncRotationZ)).ToArray();
+			}
+			else
+			{
+				activeAxes = axis;
+			}
+			
+			bool[][] permutations = GeneratePermutations(activeAxes.Length);
 			bool[][] objectPermutations = GeneratePermutations(objectBits);
 			
 			int multiplier = read ? -1 : 1;
+			
 			string mode = read ? "Read" : "Write";
 			
 			#region states
@@ -1395,8 +1440,8 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			startState.state.behaviours = new[]
 			{
-				read 
-					? GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/{name}{x}", name: $"CustomObjectSync/Temp/{name}{x}/{o}")).ToArray())
+				read
+					? GenerateParameterDriver(activeAxes.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/{name}{x}", name: $"CustomObjectSync/Temp/{name}{x}/{o}")).ToArray())
 					: GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Temp/{name}{x}/{o}", value: 0)).ToArray())
 			};
 
@@ -1416,8 +1461,12 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			if (!read && copyBoth)
 			{
+				string[] activeRotationAxes = new[] { "X", "Y", "Z" }.Where((axisName, i) => (i == 0 && syncRotationX) || (i == 1 && syncRotationY) || (i == 2 && syncRotationZ)).ToArray();
 				endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Position{x}/{o}", name: $"CustomObjectSync/Position{x}")).ToArray())).ToArray();
-				endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Rotation{x}/{o}", name: $"CustomObjectSync/Rotation{x}")).ToArray())).ToArray();
+				if (rotationEnabled)
+				{
+					endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(activeRotationAxes.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Rotation{x}/{o}", name: $"CustomObjectSync/Rotation{x}")).ToArray())).ToArray();
+				}
 				startState.state.behaviours = startState.state.behaviours.Append(GenerateParameterDriver(Enumerable.Range(0 ,objectBits).Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Sync/Object{x}", name: $"CustomObjectSync/Temp/Object{o}-{x}")).ToArray())).ToArray();
 				endState.state.behaviours = endState.state.behaviours.Append(GenerateParameterDriver(Enumerable.Range(0 ,objectBits).Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/Temp/Object{o}-{x}", name: $"CustomObjectSync/Object{x}")).ToArray())).ToArray();
 			}
@@ -1427,7 +1476,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				List<ChildAnimatorState> states = new List<ChildAnimatorState>();
 				bitStates.Add(states);
-				for (int s = 0; s < 8; s++)
+				for (int s = 0; s < Math.Pow(2, activeAxes.Length); s++)
 				{
 					bool[] perm = permutations[s];
 					string permString = perm.Aggregate("", (s1, b1) => s1 += (b1 ? "1" : "0"));
@@ -1435,27 +1484,27 @@ namespace VRLabs.CustomObjectSyncCreator
 
 					List<Parameter> parameterDriverParams = new List<Parameter>();
 					for (int p = 0; p < perm.Length; p++)
-					{
+ 					{
 						if (read)
 						{
 							if (perm[p])
 							{
-								parameterDriverParams.Add(GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Bits/{name}{axis[p]}{b}/{o}", value: 1));
-								parameterDriverParams.Add(GenerateParameter(ChangeType.Add, name: $"CustomObjectSync/Temp/{name}{axis[p]}/{o}", value: -1 * Mathf.Pow(0.5f, b + 1)));
+								parameterDriverParams.Add(GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Bits/{name}{activeAxes[p]}{b}/{o}", value: 1));
+								parameterDriverParams.Add(GenerateParameter(ChangeType.Add, name: $"CustomObjectSync/Temp/{name}{activeAxes[p]}/{o}", value: -1 * Mathf.Pow(0.5f, b + 1)));
 							}
 							else
 							{
-								parameterDriverParams.Add(GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Bits/{name}{axis[p]}{b}/{o}", value: 0));
+								parameterDriverParams.Add(GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Bits/{name}{activeAxes[p]}{b}/{o}", value: 0));
 							}
 						}
 						else
 						{
 							if (perm[p])
 							{
-								parameterDriverParams.Add(GenerateParameter(ChangeType.Add, name: $"CustomObjectSync/Temp/{name}{axis[p]}/{o}", value: 1 * Mathf.Pow(0.5f, b + 1)));
+								parameterDriverParams.Add(GenerateParameter(ChangeType.Add, name: $"CustomObjectSync/Temp/{name}{activeAxes[p]}/{o}", value: 1 * Mathf.Pow(0.5f, b + 1)));
 							}
 						}
-					}
+ 					}
 					state.behaviours = new StateMachineBehaviour[]
 					{
 						GenerateParameterDriver(parameterDriverParams.ToArray())
@@ -1475,7 +1524,7 @@ namespace VRLabs.CustomObjectSyncCreator
 						.Append(GenerateCondition(AnimatorConditionMode.If, $"CustomObjectSync/Start{mode}/{o}", 0))
 						.Append(GenerateCondition( read ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, "IsLocal", 0)).ToArray())
 					).ToArray();
-			startState.state.transitions = bitStates[0].Select((x, index) => GenerateBitTransition(permutations[index], 0, o, name, x.state, read)).ToArray();
+			startState.state.transitions = bitStates.Count > 0 ? bitStates[0].Select((x, index) => GenerateBitTransition(permutations[index], 0, o, name, x.state, read)).ToArray() : new [] { GenerateTransition("", destinationState: endState.state, hasExitTime: true, exitTime: 1) };
 
 			for (var i = 0; i < bitStates.Count; i++)
 			{
@@ -1759,7 +1808,10 @@ namespace VRLabs.CustomObjectSyncCreator
 		
 		public int GetMaxBitCount()
 		{
-			int rotationBits = rotationEnabled ? (rotationPrecision * 3) : 0;
+			int rotationBits = 0;
+			if(syncRotationX) rotationBits += rotationPrecision;
+			if(syncRotationY) rotationBits += rotationPrecision;
+			if(syncRotationZ) rotationBits += rotationPrecision;
 			int positionBits = 3 * (maxRadius + positionPrecision);
 			int maxbitCount = rotationBits + positionBits;
 			return maxbitCount;
@@ -1773,32 +1825,47 @@ namespace VRLabs.CustomObjectSyncCreator
 
 		public AnimatorStateTransition GenerateBitTransition(bool[] values, int index, int objectIndex, string parameterName, AnimatorState destinationState, bool read)
 		{
+			string[] activeAxes;
+			if (parameterName == "Rotation")
+			{
+				activeAxes = new[] { "X", "Y", "Z" }.Where((axisName, i) => (i == 0 && syncRotationX) || (i == 1 && syncRotationY) || (i == 2 && syncRotationZ)).ToArray();
+			}
+			else
+			{
+				activeAxes = axis;
+			}
 			AnimatorStateTransition transition = null;
 			if (read)
 			{
 				transition = 
-					GenerateTransition("", destinationState: destinationState, conditions: Enumerable.Range(0, values.Length).Select(i =>
+					GenerateTransition("", destinationState: destinationState, conditions: Enumerable.Range(0, activeAxes.Length).Select(i =>
 						GenerateCondition(
 							values[i] ? AnimatorConditionMode.Greater : AnimatorConditionMode.Less, 
-							$"CustomObjectSync/Temp/{parameterName}{axis[i]}/{objectIndex}" , 
+							$"CustomObjectSync/Temp/{parameterName}{activeAxes[i]}/{objectIndex}" , 
 							Mathf.Pow(0.5f, index + 1) * (values[i] ? 0.9999f : 1.0001f))
 					).ToArray());
 			}
 			else
 			{
 				transition = 
-					GenerateTransition("", destinationState: destinationState, conditions: Enumerable.Range(0, values.Length).Select(i =>
+					GenerateTransition("", destinationState: destinationState, conditions: Enumerable.Range(0, activeAxes.Length).Select(i =>
 						GenerateCondition(
 							values[i] ? AnimatorConditionMode.If : AnimatorConditionMode.IfNot, 
-							$"CustomObjectSync/Bits/{parameterName}{axis[i]}{index}/{objectIndex}" , 
+							$"CustomObjectSync/Bits/{parameterName}{activeAxes[i]}{index}/{objectIndex}" , 
 							0)
 						).ToArray());
 			}
 			
-			
 
 			return transition;
 		}
+
+		public int GetRotationAxisCount()
+		{
+			return (syncRotationX ? 1 : 0) + (syncRotationY ? 1 : 0) + (syncRotationZ ? 1 : 0);
+		}
+
+
 		
 		
 		bool[][] GeneratePermutations(int size)
