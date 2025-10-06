@@ -1442,7 +1442,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				read
 					? GenerateParameterDriver(activeAxes.Select(x => GenerateParameter(ChangeType.Copy, source: $"CustomObjectSync/{name}{x}", name: $"CustomObjectSync/Temp/{name}{x}/{o}")).ToArray())
-					: GenerateParameterDriver(axis.Select(x => GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Temp/{name}{x}/{o}", value: 0)).ToArray())
+					: GenerateParameterDriver(activeAxes.Select(x => GenerateParameter(ChangeType.Set, name: $"CustomObjectSync/Temp/{name}{x}/{o}", value: 0)).ToArray())
 			};
 
 			if (copyBoth)

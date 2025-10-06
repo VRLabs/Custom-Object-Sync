@@ -229,10 +229,26 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			using (new HorizontalScope(GUI.skin.box))
 			{
-				GUILayout.Label("Enable Rotation Sync:", GUILayout.ExpandWidth(false));
-				creator.syncRotationX = GUILayout.Toggle(creator.syncRotationX, "X");
-				creator.syncRotationY = GUILayout.Toggle(creator.syncRotationY, "Y");
-				creator.syncRotationZ = GUILayout.Toggle(creator.syncRotationZ, "Z");
+				bool prev = creator.rotationEnabled;
+				bool now = GUILayout.Toggle(prev, "Enable Rotation Sync");
+				if (now != prev)
+				{
+					creator.syncRotationX = now;
+					creator.syncRotationY = now;
+					creator.syncRotationZ = now;
+				}
+			}
+
+			// Show per-axis checkboxes only when rotation sync is enabled
+			if (creator.rotationEnabled)
+			{
+				using (new HorizontalScope(GUI.skin.box))
+				{
+					GUILayout.Label("Rotation Axes:", GUILayout.ExpandWidth(false));
+					creator.syncRotationX = GUILayout.Toggle(creator.syncRotationX, "X");
+					creator.syncRotationY = GUILayout.Toggle(creator.syncRotationY, "Y");
+					creator.syncRotationZ = GUILayout.Toggle(creator.syncRotationZ, "Z");
+				}
 			}
 
 			GUILayout.Space(2);
@@ -325,23 +341,37 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			GUILayout.Space(2);
 
-			using (new VerticalScope(GUI.skin.box))
+			using (new HorizontalScope(GUI.skin.box))
 			{
-				using (new HorizontalScope())
+				bool prev = creator.rotationEnabled;
+				bool now = GUILayout.Toggle(prev, "Enable Rotation Sync");
+				if (now != prev)
 				{
-					GUILayout.Label("Enable Rotation Sync:", GUILayout.ExpandWidth(false));
-					creator.syncRotationX = GUILayout.Toggle(creator.syncRotationX, "X");
-					creator.syncRotationY = GUILayout.Toggle(creator.syncRotationY, "Y");
-					creator.syncRotationZ = GUILayout.Toggle(creator.syncRotationZ, "Z");
+					creator.syncRotationX = now;
+					creator.syncRotationY = now;
+					creator.syncRotationZ = now;
 				}
-				creator.centeredOnAvatar = EditorGUILayout.Popup(new GUIContent("Sync Type",
+
+				creator.centeredOnAvatar = EditorGUILayout.Popup(new GUIContent("Sync Type", 
 						"Avatar Centered drops the sync point at the avatar's base when enabling sync. This means radius can be way lower, but it is not late join synced.\n" +
-						"World Centered syncs from world origin, which means larger radius is required, but it is late join synced."), (creator.centeredOnAvatar ? 1 : 0),
+						"World Centered syncs from world origin, which means larger radius is required, but it is late join synced."), (creator.centeredOnAvatar ? 1 : 0), 
 					new GUIContent[]
 					{
 						new GUIContent("World Centered", "Syncs from world origin, which means larger radius is required, but it is late join synced."),
 						new GUIContent("Avatar Centered", "Drops the sync point at the avatar's base when enabling sync. This means radius can be way lower, but it is not late join synced.")
-					}) == 1;
+					} ) == 1;
+			}
+			
+			// Show per-axis checkboxes only when rotation sync is enabled
+			if (creator.rotationEnabled)
+			{
+				using (new HorizontalScope(GUI.skin.box))
+				{
+					GUILayout.Label("Rotation Axes:", GUILayout.ExpandWidth(false));
+					creator.syncRotationX = GUILayout.Toggle(creator.syncRotationX, "X");
+					creator.syncRotationY = GUILayout.Toggle(creator.syncRotationY, "Y");
+					creator.syncRotationZ = GUILayout.Toggle(creator.syncRotationZ, "Z");
+				}
 			}
 			
 			GUILayout.Space(2);
