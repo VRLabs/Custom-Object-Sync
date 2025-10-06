@@ -917,6 +917,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			if (!rotationEnabled)
 			{
 				DestroyImmediate(syncSystem.transform.Find("Measure/Rotation").gameObject);
+				DestroyImmediate(syncSystem.transform.Find("Set/Result").GetComponent<VRCRotationConstraint>());
 			}
 			else
 			{
