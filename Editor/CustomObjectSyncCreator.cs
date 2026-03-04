@@ -1811,6 +1811,15 @@ namespace VRLabs.CustomObjectSyncCreator
 			return any ? syncObjects.Where(x => !ignoreNulls || x != null).Any(predicate) : syncObjects.Where(x => !ignoreNulls || x != null).All(predicate);
 		}
 		
+		public static string ReplaceAtStart(string input, string oldValue, string newValue)
+		{
+			if (input.StartsWith(oldValue))
+			{
+				return newValue + input.Substring(oldValue.Length);
+			}
+			return input;
+		}
+		
         public static void RenameClipPaths(AnimationClip[] clips, bool replaceEntire, string oldPath, string newPath)
         {
             try
@@ -1834,7 +1843,7 @@ namespace VRLabs.CustomObjectSyncCreator
                             if (!replaceEntire && binding.path.StartsWith(oldPath))
                             {
                                 AnimationUtility.SetObjectReferenceCurve(clip, binding, null);
-                                binding.path = binding.path.Replace(oldPath, newPath);
+                                binding.path = ReplaceAtStart(binding.path, oldPath, newPath);
                                 AnimationUtility.SetObjectReferenceCurve(clip, binding, objectCurve);
                             }
 
@@ -1852,7 +1861,7 @@ namespace VRLabs.CustomObjectSyncCreator
                             if (!replaceEntire && binding.path.StartsWith(oldPath))
                             {
                                 AnimationUtility.SetEditorCurve(clip, binding, null);
-                                binding.path = binding.path.Replace(oldPath, newPath);
+                                binding.path = ReplaceAtStart(binding.path, oldPath, newPath);
                                 AnimationUtility.SetEditorCurve(clip, binding, floatCurve);
                             }
 
