@@ -244,7 +244,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				using (new HorizontalScope(GUI.skin.box))
 				{
-					GUILayout.Label("Rotation Axes:", GUILayout.ExpandWidth(false));
+					GUILayout.Label("Rotation Axes (Experimental):", GUILayout.ExpandWidth(false));
 					creator.syncRotationX = GUILayout.Toggle(creator.syncRotationX, "X");
 					creator.syncRotationY = GUILayout.Toggle(creator.syncRotationY, "Y");
 					creator.syncRotationZ = GUILayout.Toggle(creator.syncRotationZ, "Z");
