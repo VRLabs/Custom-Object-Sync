@@ -1388,8 +1388,8 @@ namespace VRLabs.CustomObjectSyncCreator
 				AnimatorControllerLayer positionLayer = GenerateLayer($"CustomObjectSync/Position Bit Convert{o}", positionMachine);
 				ChildAnimatorState initialState = GenerateChildState(new Vector3(-100, 400, 0), GenerateState("Initial", motion: buffer));
 			
-				SetupAnimationControllerCopy("Position", o, buffer, initialState, positionMachine, positionBits, objectParameterCount, true, positionBits > GetRotationAxisCount() * rotationPrecision);
-				SetupAnimationControllerCopy("Position", o, buffer, initialState, positionMachine, positionBits, objectParameterCount, false, positionBits > GetRotationAxisCount() * rotationPrecision);
+				SetupAnimationControllerCopy("Position", o, buffer, initialState, positionMachine, positionBits, objectParameterCount, true, positionBits > rotationPrecision);
+				SetupAnimationControllerCopy("Position", o, buffer, initialState, positionMachine, positionBits, objectParameterCount, false, positionBits > rotationPrecision);
 				positionMachine.states = new[] { initialState }.Concat(positionMachine.states).ToArray();
 				positionMachine.defaultState = initialState.state;
 				bitLayers.Add(positionLayer);
@@ -1400,8 +1400,8 @@ namespace VRLabs.CustomObjectSyncCreator
 					AnimatorControllerLayer rotationLayer = GenerateLayer($"CustomObjectSync/Rotation Bit Convert{o}", rotationMachine);
 					ChildAnimatorState initialRotationState = GenerateChildState(new Vector3(-100, 400, 0), GenerateState("Initial", motion: buffer));
 
-					SetupAnimationControllerCopy("Rotation", o, buffer, initialRotationState, rotationMachine, rotationPrecision, objectParameterCount,  true, positionBits <= GetRotationAxisCount() * rotationPrecision);	
-					SetupAnimationControllerCopy("Rotation", o, buffer, initialRotationState, rotationMachine, rotationPrecision, objectParameterCount, false, positionBits <= GetRotationAxisCount() * rotationPrecision);	
+					SetupAnimationControllerCopy("Rotation", o, buffer, initialRotationState, rotationMachine, rotationPrecision, objectParameterCount,  true, positionBits <= rotationPrecision);	
+					SetupAnimationControllerCopy("Rotation", o, buffer, initialRotationState, rotationMachine, rotationPrecision, objectParameterCount, false, positionBits <= rotationPrecision);	
 					rotationMachine.states = new[] { initialRotationState }.Concat(rotationMachine.states).ToArray();
 					rotationMachine.defaultState = initialRotationState.state;
 					bitLayers.Add(rotationLayer);
