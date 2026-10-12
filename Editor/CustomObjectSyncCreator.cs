@@ -41,6 +41,11 @@ namespace VRLabs.CustomObjectSyncCreator
 		public bool writeDefaults = true;
 		public bool addLocalDebugView = false;
 		public string menuLocation = "";
+		public bool installToPrefab = false;
+		public GameObject prefabRoot;
+
+		// The transform all generated animation paths are relative to: the avatar descriptor, or the prefab root.
+		private Transform installRoot;
 
 		public const string STANDARD_NEW_ANIMATION_FOLDER = "Assets/VRLabs/GeneratedAssets/CustomObjectSync/Animations/";
 		public const string STANDARD_NEW_ANIMATOR_FOLDER = "Assets/VRLabs/GeneratedAssets/CustomObjectSync/Animators/";
@@ -79,9 +84,11 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			syncObjects = syncObjects.Where(x => x != null).ToArray();
 			
-			VRCAvatarDescriptor descriptor = syncObjects.Select(x => x.GetComponentInParent<VRCAvatarDescriptor>()).FirstOrDefault();
+			installRoot = GetInstallRoot();
 			
-			if (descriptor == null) return;
+			if (installRoot == null) return;
+
+			VRCAvatarDescriptor descriptor = installToPrefab ? null : installRoot.GetComponent<VRCAvatarDescriptor>();
 
 			int syncSteps = Mathf.CeilToInt(GetMaxBitCount() / (float)bitCount);
 			int syncStepParameterCount = Mathf.CeilToInt(Mathf.Log(syncSteps, 2));
@@ -93,15 +100,23 @@ namespace VRLabs.CustomObjectSyncCreator
 			
 			#region Resource Setup
 
-			descriptor.customizeAnimationLayers = true;
-			RuntimeAnimatorController runtimeController = descriptor.baseAnimationLayers
-				.Where(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).Select(x => x.animatorController)
-				.FirstOrDefault();
-			AnimatorController mergeController = runtimeController == null ? null : (AnimatorController) runtimeController;
+			// When installing into a prefab, the avatar is left untouched and standalone assets are generated
+			// for the prefab's own merge tooling (e.g. a VRCFury Full Controller or Modular Avatar Merge Animator).
+			AnimatorController mergeController = null;
+			VRCExpressionParameters parameterObject = null;
+			VRCExpressionsMenu menuObject = null;
+			if (!installToPrefab)
+			{
+				descriptor.customizeAnimationLayers = true;
+				RuntimeAnimatorController runtimeController = descriptor.baseAnimationLayers
+					.Where(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).Select(x => x.animatorController)
+					.FirstOrDefault();
+				mergeController = runtimeController == null ? null : (AnimatorController) runtimeController;
 
-			VRCExpressionParameters parameterObject = descriptor.expressionParameters;
-			VRCExpressionsMenu menuObject = GetMenuFromLocation(descriptor, menuLocation);
-			
+				parameterObject = descriptor.expressionParameters;
+				menuObject = GetMenuFromLocation(descriptor, menuLocation);
+			}
+
 			Directory.CreateDirectory(STANDARD_NEW_ANIMATOR_FOLDER);
 			string uniqueControllerPath = AssetDatabase.GenerateUniqueAssetPath(STANDARD_NEW_ANIMATOR_FOLDER + "CustomObjectSync.controller");
 			if (mergeController == null)
@@ -152,7 +167,10 @@ namespace VRLabs.CustomObjectSyncCreator
 				AssetDatabase.SaveAssets();
 				AssetDatabase.Refresh();
 				menuObject = AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(uniquePath);
-				descriptor.expressionsMenu = menuObject;
+				if (!installToPrefab)
+				{
+					descriptor.expressionsMenu = menuObject;
+				}
 			}
 			
 			if (menuObject == null)
@@ -299,8 +317,13 @@ namespace VRLabs.CustomObjectSyncCreator
 			EditorUtility.SetDirty(parameterObject);
 			#endregion
 
-			GameObject syncSystem = InstallSystem(descriptor, mergedController, parameterObject);
-			
+			GameObject syncSystem = InstallSystem();
+
+			if (!installToPrefab)
+			{
+				ApplyToDescriptor(descriptor, mergedController, parameterObject);
+			}
+
 			List<AnimatorControllerLayer> layersToAdd = new List<AnimatorControllerLayer>();
 			
 			if (!quickSync) layersToAdd = GenerateBitConversionLayers(objectCount, buffer, positionBits, objectParameterCount, rotationBits);
@@ -308,12 +331,12 @@ namespace VRLabs.CustomObjectSyncCreator
 			AnimatorControllerLayer syncLayer = SetupSyncLayer(syncSteps, positionBits, rotationBits, objectCount, objectParameterCount, objectPerms, syncStepParameterCount, syncStepPerms);
 			layersToAdd.Add(syncLayer);
 			
-			AnimatorControllerLayer displayLayer = SetupDisplayLayer(descriptor, objectCount, syncSystem, buffer, objectParameterCount, objectPerms);
+			AnimatorControllerLayer displayLayer = SetupDisplayLayer(objectCount, syncSystem, buffer, objectParameterCount, objectPerms);
  			layersToAdd.Add(displayLayer);
 
 			if (addLocalDebugView)
 			{
-				layersToAdd.Add(SetupLocalDebugViewLayer(descriptor, objectCount, syncSystem, buffer, objectParameterCount, objectPerms));
+				layersToAdd.Add(SetupLocalDebugViewLayer(objectCount, syncSystem, buffer, objectParameterCount, objectPerms));
 			}
 			
 			mergedController.layers = mergedController.layers.Concat(layersToAdd).ToArray();
@@ -349,14 +372,28 @@ namespace VRLabs.CustomObjectSyncCreator
 			}
 
 
+			if (installToPrefab)
+			{
+				string message = $"Custom Object Sync has been successfully installed into \"{installRoot.name}\".\n\n" +
+				                 "Your avatar has not been modified. Add the following generated assets to your prefab's merge component " +
+				                 "(e.g. a VRCFury Full Controller, or Modular Avatar Merge Animator + Parameters + Menu Installer), " +
+				                 $"with animation paths relative to \"{installRoot.name}\":\n\n" +
+				                 $"Controller: {AssetDatabase.GetAssetPath(mergedController)}\n" +
+				                 $"Parameters: {AssetDatabase.GetAssetPath(parameterObject)}\n" +
+				                 $"Menu: {AssetDatabase.GetAssetPath(menuObject)}";
+				Debug.Log(message);
+				EditorUtility.DisplayDialog("Success!", message, "Ok");
+				return;
+			}
+
 			EditorUtility.DisplayDialog("Success!", "Custom Object Sync has been successfully installed", "Ok");
 		}
 
-		private AnimatorControllerLayer SetupDisplayLayer(VRCAvatarDescriptor descriptor, int objectCount,
+		private AnimatorControllerLayer SetupDisplayLayer(int objectCount,
 			GameObject syncSystem, AnimationClip buffer, int objectParameterCount, bool[][] objectPerms)
 		{
-			string[] targetStrings = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(addDampeningConstraint ? x.transform.parent.Find($"{x.name} Damping Sync") : x.transform, descriptor.transform)).ToArray();
-			string[] dampingConstraints = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)).ToArray();
+			string[] targetStrings = syncObjects.Select(x => GetRootPath(addDampeningConstraint ? x.transform.parent.Find($"{x.name} Damping Sync") : x.transform)).ToArray();
+			string[] dampingConstraints = syncObjects.Select(x => GetRootPath(x.transform)).ToArray();
 			float contactBugOffset = Mathf.Pow(2, maxRadius - 6); // Fixes a bug where proximity contacts near edges give 0, so we set this theoretical 0 to far away from spawn to reduce chances of this happening
 
 			AnimationClip enableMeasure = GenerateClip("localMeasureEnabled");
@@ -383,7 +420,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			AnimationClip disableDamping = GenerateClip("localDisableDamping");
 			if (addDampeningConstraint)
 			{
-				foreach (string targetPath in syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)))
+				foreach (string targetPath in syncObjects.Select(x => GetRootPath(x.transform)))
 				{
 					AddCurve(disableDamping, targetPath, typeof(VRCParentConstraint), "Sources.source0.Weight", AnimationCurve.Constant(0, 1/60f, 1));
 					AddCurve(disableDamping, targetPath, typeof(VRCParentConstraint), "Sources.source1.Weight", AnimationCurve.Constant(0, 1/60f, 0));
@@ -395,7 +432,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			List<ChildAnimatorState> displayStates = new List<ChildAnimatorState>();
 			AnimationClip[] localConstraintTargetClips = Enumerable.Range(0, objectCount).Select(x =>
 			{
-				string targetString = AnimationUtility.CalculateTransformPath(syncSystem.transform, descriptor.transform) + "/Target";
+				string targetString = GetRootPath(syncSystem.transform) + "/Target";
 				AnimationClip localConstraintOn = GenerateClip($"localVRCParentConstraintEnabled{x}");
 				Enumerable.Range(0, objectCount).ToList().ForEach(y=> AddCurve(localConstraintOn, targetString, typeof(VRCParentConstraint), $"Sources.source{y}.Weight", AnimationCurve.Constant(0, 1 / 60f, x == y ? 1 : 0)));
 				return localConstraintOn;
@@ -669,7 +706,7 @@ namespace VRLabs.CustomObjectSyncCreator
 			return tree;
 		}
 
-		private AnimatorControllerLayer SetupLocalDebugViewLayer(VRCAvatarDescriptor descriptor, int objectCount,
+		private AnimatorControllerLayer SetupLocalDebugViewLayer(int objectCount,
 			GameObject syncSystem, AnimationClip buffer, int objectParameterCount, bool[][] objectPerms)
 		{
 			List<ChildAnimatorState> states = new List<ChildAnimatorState>();
@@ -677,8 +714,8 @@ namespace VRLabs.CustomObjectSyncCreator
 			ChildAnimatorState IdleRemote = GenerateChildState(new Vector3(30f, 200f, 0f), StateIdleRemote);
 			states.Add(IdleRemote);
 			
-			string[] targetStrings = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(addDampeningConstraint ? x.transform.parent.Find($"{x.name} Damping Sync") : x.transform, descriptor.transform)).ToArray();
-			string[] dampingConstraints = syncObjects.Select(x => AnimationUtility.CalculateTransformPath(x.transform, descriptor.transform)).ToArray();
+			string[] targetStrings = syncObjects.Select(x => GetRootPath(addDampeningConstraint ? x.transform.parent.Find($"{x.name} Damping Sync") : x.transform)).ToArray();
+			string[] dampingConstraints = syncObjects.Select(x => GetRootPath(x.transform)).ToArray();
 			
 			AnimationClip idleLocal = GenerateClip("IdleLocal");
 			Enumerable.Range(0, targetStrings.Length).ToList().ForEach(i =>
@@ -893,11 +930,9 @@ namespace VRLabs.CustomObjectSyncCreator
 			DestroyImmediate((Component)constraint);
 		}
 
-		private GameObject InstallSystem(VRCAvatarDescriptor descriptor, AnimatorController mergedController,
-			VRCExpressionParameters parameterObject)
+		private GameObject InstallSystem()
 		{
-			GameObject rootObject = descriptor.gameObject;
-			GameObject syncSystem = Instantiate(resourcePrefab, rootObject.transform);
+			GameObject syncSystem = Instantiate(resourcePrefab, installRoot);
 			syncSystem.name = syncSystem.name.Replace("(Clone)", "");
 
 			foreach (string s in axis)
@@ -956,18 +991,16 @@ namespace VRLabs.CustomObjectSyncCreator
 				targetObject.localRotation = targetSyncObject.transform.localRotation;
 				targetObject.localScale = targetSyncObject.transform.localScale;
 				mainTargetVRCParentConstraint.Sources.Add(new VRCConstraintSource(targetObject, 0f, Vector3.zero, Vector3.zero));
-				string oldPath = GetDescriptorPath(targetSyncObject);
+				string oldPath = GetRootPath(targetSyncObject);
 				targetSyncObject.transform.parent = syncSystem.transform;
 				if (targetSyncObject.name == "Target") targetSyncObject.name = "User Target";
-				string newPath = GetDescriptorPath(targetSyncObject);
-				AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
-					.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
-					.ToArray();
+				string newPath = GetRootPath(targetSyncObject);
+				AnimationClip[] allClips = GetAnimationClips();
 				RenameClipPaths(allClips, false, oldPath, newPath);
-				
+
 				// Unity Constraints
 				var components = targetSyncObject.GetComponents<IConstraint>();
-				string targetPath = GetDescriptorPath(targetObject);
+				string targetPath = GetRootPath(targetObject);
 				for (var j = 0; j < components.Length; j++)
 				{
 					// Move constraint animations to the new path.
@@ -995,7 +1028,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				
 				// VRChat Constraints
 				var vrcComponents = targetSyncObject.GetComponents<VRCConstraintBase>();
-				string vrcTargetPath = GetDescriptorPath(targetObject);
+				string vrcTargetPath = GetRootPath(targetObject);
 				for (var j = 0; j < vrcComponents.Length; j++)
 				{
 					// Move constraint animations to the new path.
@@ -1062,8 +1095,8 @@ namespace VRLabs.CustomObjectSyncCreator
 			{
 				VRCPositionConstraint setConstraint = setTransform.gameObject.AddComponent<VRCPositionConstraint>();
 				VRCPositionConstraint measureConstraint = measureTransform.gameObject.AddComponent<VRCPositionConstraint>();
-				setConstraint.Sources.Add(new VRCConstraintSource(descriptor.transform, 1f, Vector3.zero, Vector3.zero));
-				measureConstraint.Sources.Add(new VRCConstraintSource(descriptor.transform, 1f, Vector3.zero, Vector3.zero));
+				setConstraint.Sources.Add(new VRCConstraintSource(installRoot, 1f, Vector3.zero, Vector3.zero));
+				measureConstraint.Sources.Add(new VRCConstraintSource(installRoot, 1f, Vector3.zero, Vector3.zero));
 				setConstraint.PositionAtRest = Vector3.zero;
 				setConstraint.PositionOffset = new Vector3(-contactBugOffset, -contactBugOffset, -contactBugOffset);
 				setConstraint.Locked = true;
@@ -1073,7 +1106,14 @@ namespace VRLabs.CustomObjectSyncCreator
 				measureConstraint.Locked = true;
 				measureConstraint.IsActive = true;
 			}
-			
+
+			Selection.activeObject = installRoot.gameObject;
+			return syncSystem;
+		}
+
+		private void ApplyToDescriptor(VRCAvatarDescriptor descriptor, AnimatorController mergedController,
+			VRCExpressionParameters parameterObject)
+		{
 			VRCAvatarDescriptor.CustomAnimLayer[] layers = descriptor.baseAnimationLayers;
 			int fxLayerIndex = layers.ToList().FindIndex(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX);
 			VRCAvatarDescriptor.CustomAnimLayer fxLayer = layers[fxLayerIndex];
@@ -1084,9 +1124,6 @@ namespace VRLabs.CustomObjectSyncCreator
 
 			descriptor.customExpressions = true;
 			descriptor.expressionParameters = parameterObject;
-			
-			Selection.activeObject = descriptor.gameObject;
-			return syncSystem;
 		}
 
 		private AnimatorControllerLayer SetupSyncLayer(int syncSteps, int positionBits, int rotationBits, int objectCount,
@@ -1556,10 +1593,158 @@ namespace VRLabs.CustomObjectSyncCreator
 
 		public void Remove()
 		{
-			VRCAvatarDescriptor descriptor = syncObjects.Select(x => x.GetComponentInParent<VRCAvatarDescriptor>()).FirstOrDefault();
+			installRoot = GetInstallRoot();
 			
-			if (descriptor == null) return;
+			if (installRoot == null) return;
 
+			// When installed into a prefab, the generated assets are standalone and the avatar was never modified,
+			// so only the hierarchy has to be restored.
+			VRCAvatarDescriptor descriptor = installToPrefab ? null : installRoot.GetComponent<VRCAvatarDescriptor>();
+			if (descriptor != null)
+			{
+				RemoveFromDescriptor(descriptor);
+			}
+			
+			if (installRoot.Find("Custom Object Sync"))
+			{
+				void CantFindTarget(Transform userObject)
+				{
+					// Can't figure out the target, so can't move back to the old path. Just move the object to the root.
+					string oldPath = AnimationUtility.CalculateTransformPath(userObject.transform, installRoot);
+					userObject.parent = installRoot;
+					string newPath = AnimationUtility.CalculateTransformPath(userObject.transform, installRoot);
+		
+					AnimationClip[] allClips = GetAnimationClips();
+					RenameClipPaths(allClips, false, oldPath, newPath);
+						
+						
+					if (userObject.GetComponent<VRCParentConstraint>() != null)
+					{
+						DestroyImmediate(userObject.GetComponent<VRCParentConstraint>());
+					}
+				}
+				
+				Transform prefab = installRoot.Find("Custom Object Sync");
+				Transform[] userObjects = Enumerable.Range(0, prefab.childCount)
+					.Select(x => prefab.GetChild(x)).Where(x => x.name != "Set" && x.name != "Measure" && x.name != "Target" && !x.name.Contains(" Damping Sync")).ToArray();
+				foreach (Transform userObject in userObjects)
+				{
+					if(userObject == null) continue;
+					VRCParentConstraint targetConstraint = userObject.GetComponent<VRCParentConstraint>();
+					if (targetConstraint == null)
+					{
+						CantFindTarget(userObject);
+						continue;
+					}
+					Transform dampingObj = targetConstraint.Sources[0].SourceTransform;
+					if (dampingObj == null)
+					{
+						CantFindTarget(userObject);
+						continue;
+					};
+					
+					VRCParentConstraint VRCParentConstraint = dampingObj.gameObject.GetComponent<VRCParentConstraint>();
+					if (VRCParentConstraint != null && VRCParentConstraint.Sources.Count == 2 && VRCParentConstraint.Sources[1].SourceTransform != null &&
+					    VRCParentConstraint.Sources[1].SourceTransform == prefab.transform.Find("Set/Result"))
+					{
+						targetConstraint = VRCParentConstraint;
+					}
+
+					Transform target = Enumerable.Range(0, targetConstraint.Sources.Count)
+							.Select(x => targetConstraint.Sources[x]).Where(x => x.SourceTransform != null && x.SourceTransform.name.EndsWith("Target"))
+							.Select(x => x.SourceTransform).FirstOrDefault();
+					
+					if (target == null)
+					{
+						CantFindTarget(userObject);
+						continue;
+					}
+					
+					string oldPath = GetRootPath(userObject);
+					if (GetRootPath(target).StartsWith(AnimationUtility.CalculateTransformPath(prefab, installRoot)))
+					{
+						target.parent = prefab.parent;// Make sure if the user put the target under the prefab, it doesnt get deleted.
+					}
+					userObject.parent = target.parent.transform;
+					string newPath = GetRootPath(userObject);
+		
+					AnimationClip[] allClips = GetAnimationClips();
+					RenameClipPaths(allClips, false, oldPath, newPath);
+						
+					if (userObject.GetComponent<VRCParentConstraint>() != null)
+					{
+						DestroyImmediate(userObject.GetComponent<VRCParentConstraint>());
+					}
+					if (userObject.GetComponent<VRCScaleConstraint>() != null)
+					{
+						DestroyImmediate(userObject.GetComponent<VRCScaleConstraint>());
+					}
+					
+					// Unity Constraints
+					var components = target.GetComponents<IConstraint>();
+					string targetPath = GetRootPath(target);
+					for (var j = 0; j < components.Length; j++)
+					{
+						// Move constraint animations to the new path.
+						AnimationClip[] targetClips = allClips.Where(x =>
+							AnimationUtility.GetCurveBindings(x)
+								.Any(y => y.type == components[j].GetType() && y.path == targetPath)).ToArray();
+						foreach (AnimationClip animationClip in targetClips)
+						{
+							EditorCurveBinding[] curveBindings = AnimationUtility.GetCurveBindings(animationClip);
+							for (var bi = 0; bi < curveBindings.Length; bi++)
+							{
+								var curveBinding = curveBindings[bi];
+								AnimationCurve curve = AnimationUtility.GetEditorCurve(animationClip, curveBinding);
+								AnimationUtility.SetEditorCurve(animationClip, curveBinding, null);
+								if (curveBinding.type == components[j].GetType() && curveBinding.path == targetPath)
+								{
+									curveBinding.path = newPath;
+								}
+								AnimationUtility.SetEditorCurve(animationClip, curveBinding, curve);
+							}
+						}
+						MoveConstraint(components[j], userObject.gameObject);
+					}
+					
+					// VRChat Constraints
+					var vrcComponents = target.GetComponents<VRCConstraintBase>();
+					string vrcTargetPath = GetRootPath(target);
+					for (var j = 0; j < vrcComponents.Length; j++)
+					{
+						// Move constraint animations to the new path.
+						AnimationClip[] targetClips = allClips.Where(x =>
+							AnimationUtility.GetCurveBindings(x)
+								.Any(y => y.type == vrcComponents[j].GetType() && y.path == vrcTargetPath)).ToArray();
+						foreach (AnimationClip animationClip in targetClips)
+						{
+							EditorCurveBinding[] curveBindings = AnimationUtility.GetCurveBindings(animationClip);
+							for (var bi = 0; bi < curveBindings.Length; bi++)
+							{
+								var curveBinding = curveBindings[bi];
+								AnimationCurve curve = AnimationUtility.GetEditorCurve(animationClip, curveBinding);
+								AnimationUtility.SetEditorCurve(animationClip, curveBinding, null);
+								if (curveBinding.type == vrcComponents[j].GetType() && curveBinding.path == vrcTargetPath)
+								{
+									curveBinding.path = newPath;
+								}
+								AnimationUtility.SetEditorCurve(animationClip, curveBinding, curve);
+							}
+						}
+						MoveVRChatConstraint(vrcComponents[j], userObject.gameObject);
+					}
+						
+					DestroyImmediate(target.gameObject);
+
+				}
+				DestroyImmediate(prefab.gameObject);
+			}
+			
+			EditorUtility.DisplayDialog("Success!", "Custom Object Sync has been successfully removed", "Ok");
+		}
+
+		private void RemoveFromDescriptor(VRCAvatarDescriptor descriptor)
+		{
 			Stack<VRCExpressionsMenu> menus = new Stack<VRCExpressionsMenu>(new [] { descriptor.expressionsMenu });
 			while (menus.Count > 0)
 			{
@@ -1585,8 +1770,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				EditorUtility.SetDirty(descriptor.expressionParameters);
 			}
 
-			if (descriptor != null &&
-			    descriptor.baseAnimationLayers.FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX)
+			if (descriptor.baseAnimationLayers.FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX)
 				    .animatorController != null &&
 			    ((AnimatorController)descriptor.baseAnimationLayers
 				    .FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController).layers
@@ -1651,156 +1835,60 @@ namespace VRLabs.CustomObjectSyncCreator
 					controller.AddLayer(baseLayer);
 				}
 			}
-			
-			if (descriptor.transform.Find("Custom Object Sync"))
-			{
-				void CantFindTarget(Transform userObject)
-				{
-					// Can't figure out the target, so can't move back to the old path. Just move the object to descriptor.
-					string oldPath = AnimationUtility.CalculateTransformPath(userObject.transform, descriptor.transform);
-					userObject.parent = descriptor.transform;
-					string newPath = AnimationUtility.CalculateTransformPath(userObject.transform, descriptor.transform);
-		
-					AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
-						.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
-						.ToArray();
-					RenameClipPaths(allClips, false, oldPath, newPath);
-						
-						
-					if (userObject.GetComponent<VRCParentConstraint>() != null)
-					{
-						DestroyImmediate(userObject.GetComponent<VRCParentConstraint>());
-					}
-				}
-				
-				Transform prefab = descriptor.transform.Find("Custom Object Sync");
-				Transform[] userObjects = Enumerable.Range(0, prefab.childCount)
-					.Select(x => prefab.GetChild(x)).Where(x => x.name != "Set" && x.name != "Measure" && x.name != "Target" && !x.name.Contains(" Damping Sync")).ToArray();
-				foreach (Transform userObject in userObjects)
-				{
-					if(userObject == null) continue;
-					VRCParentConstraint targetConstraint = userObject.GetComponent<VRCParentConstraint>();
-					if (targetConstraint == null)
-					{
-						CantFindTarget(userObject);
-						continue;
-					}
-					Transform dampingObj = targetConstraint.Sources[0].SourceTransform;
-					if (dampingObj == null)
-					{
-						CantFindTarget(userObject);
-						continue;
-					};
-					
-					VRCParentConstraint VRCParentConstraint = dampingObj.gameObject.GetComponent<VRCParentConstraint>();
-					if (VRCParentConstraint != null && VRCParentConstraint.Sources.Count == 2 && VRCParentConstraint.Sources[1].SourceTransform != null &&
-					    VRCParentConstraint.Sources[1].SourceTransform == prefab.transform.Find("Set/Result"))
-					{
-						targetConstraint = VRCParentConstraint;
-					}
-
-					Transform target = Enumerable.Range(0, targetConstraint.Sources.Count)
-							.Select(x => targetConstraint.Sources[x]).Where(x => x.SourceTransform != null && x.SourceTransform.name.EndsWith("Target"))
-							.Select(x => x.SourceTransform).FirstOrDefault();
-					
-					if (target == null)
-					{
-						CantFindTarget(userObject);
-						continue;
-					}
-					
-					string oldPath = GetDescriptorPath(userObject);
-					if (GetDescriptorPath(target).StartsWith(AnimationUtility.CalculateTransformPath(prefab, descriptor.transform)))
-					{
-						target.parent = prefab.parent;// Make sure if the user put the target under the prefab, it doesnt get deleted.
-					}
-					userObject.parent = target.parent.transform;
-					string newPath = GetDescriptorPath(userObject);
-		
-					AnimationClip[] allClips = descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
-						.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
-						.ToArray();
-					RenameClipPaths(allClips, false, oldPath, newPath);
-						
-					if (userObject.GetComponent<VRCParentConstraint>() != null)
-					{
-						DestroyImmediate(userObject.GetComponent<VRCParentConstraint>());
-					}
-					if (userObject.GetComponent<VRCScaleConstraint>() != null)
-					{
-						DestroyImmediate(userObject.GetComponent<VRCScaleConstraint>());
-					}
-					
-					// Unity Constraints
-					var components = target.GetComponents<IConstraint>();
-					string targetPath = GetDescriptorPath(target);
-					for (var j = 0; j < components.Length; j++)
-					{
-						// Move constraint animations to the new path.
-						AnimationClip[] targetClips = allClips.Where(x =>
-							AnimationUtility.GetCurveBindings(x)
-								.Any(y => y.type == components[j].GetType() && y.path == targetPath)).ToArray();
-						foreach (AnimationClip animationClip in targetClips)
-						{
-							EditorCurveBinding[] curveBindings = AnimationUtility.GetCurveBindings(animationClip);
-							for (var bi = 0; bi < curveBindings.Length; bi++)
-							{
-								var curveBinding = curveBindings[bi];
-								AnimationCurve curve = AnimationUtility.GetEditorCurve(animationClip, curveBinding);
-								AnimationUtility.SetEditorCurve(animationClip, curveBinding, null);
-								if (curveBinding.type == components[j].GetType() && curveBinding.path == targetPath)
-								{
-									curveBinding.path = newPath;
-								}
-								AnimationUtility.SetEditorCurve(animationClip, curveBinding, curve);
-							}
-						}
-						MoveConstraint(components[j], userObject.gameObject);
-					}
-					
-					// VRChat Constraints
-					var vrcComponents = target.GetComponents<VRCConstraintBase>();
-					string vrcTargetPath = GetDescriptorPath(target);
-					for (var j = 0; j < vrcComponents.Length; j++)
-					{
-						// Move constraint animations to the new path.
-						AnimationClip[] targetClips = allClips.Where(x =>
-							AnimationUtility.GetCurveBindings(x)
-								.Any(y => y.type == vrcComponents[j].GetType() && y.path == vrcTargetPath)).ToArray();
-						foreach (AnimationClip animationClip in targetClips)
-						{
-							EditorCurveBinding[] curveBindings = AnimationUtility.GetCurveBindings(animationClip);
-							for (var bi = 0; bi < curveBindings.Length; bi++)
-							{
-								var curveBinding = curveBindings[bi];
-								AnimationCurve curve = AnimationUtility.GetEditorCurve(animationClip, curveBinding);
-								AnimationUtility.SetEditorCurve(animationClip, curveBinding, null);
-								if (curveBinding.type == vrcComponents[j].GetType() && curveBinding.path == vrcTargetPath)
-								{
-									curveBinding.path = newPath;
-								}
-								AnimationUtility.SetEditorCurve(animationClip, curveBinding, curve);
-							}
-						}
-						MoveVRChatConstraint(vrcComponents[j], userObject.gameObject);
-					}
-						
-					DestroyImmediate(target.gameObject);
-
-				}
-				DestroyImmediate(prefab.gameObject);
-			}
-			
-			EditorUtility.DisplayDialog("Success!", "Custom Object Sync has been successfully removed", "Ok");
 		}
 
-		public string GetDescriptorPath(Transform obj)
+		public Transform GetInstallRoot()
 		{
-			VRCAvatarDescriptor descriptor = obj.GetComponentInParent<VRCAvatarDescriptor>();
-			return AnimationUtility.CalculateTransformPath(obj.transform, descriptor.transform);
+			if (installToPrefab)
+			{
+				return prefabRoot != null ? prefabRoot.transform : null;
+			}
+
+			VRCAvatarDescriptor descriptor = syncObjects?.Where(x => x != null)
+				.Select(x => x.GetComponentInParent<VRCAvatarDescriptor>()).FirstOrDefault(x => x != null);
+			return descriptor != null ? descriptor.transform : null;
+		}
+
+		public string GetRootPath(Transform obj)
+		{
+			return AnimationUtility.CalculateTransformPath(obj.transform, installRoot);
 		}
 		
-		public string GetDescriptorPath(GameObject obj) => GetDescriptorPath(obj.transform);
+		public string GetRootPath(GameObject obj) => GetRootPath(obj.transform);
+		
+		// All animation clips whose paths are relative to the install root and should follow the synced objects when they get moved.
+		private AnimationClip[] GetAnimationClips()
+		{
+			VRCAvatarDescriptor descriptor = installRoot.GetComponent<VRCAvatarDescriptor>();
+			if (!installToPrefab && descriptor != null)
+			{
+				return descriptor.baseAnimationLayers.Concat(descriptor.specialAnimationLayers)
+					.Where(x => x.animatorController != null).SelectMany(x => x.animatorController.animationClips)
+					.ToArray();
+			}
+
+			// A prefab has no descriptor, so collect every controller and clip referenced by components under the root.
+			// This covers VRCFury Full Controllers, Modular Avatar Merge Animators etc. without depending on either package.
+			HashSet<AnimationClip> clips = new HashSet<AnimationClip>();
+			foreach (Component component in installRoot.GetComponentsInChildren<Component>(true))
+			{
+				if (component == null || component is Transform) continue; // Missing scripts are null
+				SerializedProperty property = new SerializedObject(component).GetIterator();
+				while (property.Next(true))
+				{
+					if (property.propertyType != SerializedPropertyType.ObjectReference) continue;
+					if (property.objectReferenceValue is RuntimeAnimatorController controller)
+					{
+						clips.UnionWith(controller.animationClips.Where(x => x != null));
+					}
+					else if (property.objectReferenceValue is AnimationClip clip)
+					{
+						clips.Add(clip);
+					}
+				}
+			}
+			return clips.ToArray();
+		}
 		
 		public int GetMaxBitCount()
 		{

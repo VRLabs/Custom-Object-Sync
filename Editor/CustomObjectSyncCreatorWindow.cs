@@ -100,82 +100,103 @@ namespace VRLabs.CustomObjectSyncCreator
 						return;
 					}
 
-					VRCAvatarDescriptor descriptor = creator.syncObjects.FirstOrDefault(x => x != null)
-						?.GetComponentInParent<VRCAvatarDescriptor>();
-
-					if (!descriptor)
+					using (new HorizontalScope(GUI.skin.box))
 					{
-						GUILayout.Label(
-							"Object is not a child of an Avatar. Please select an object that is a child of an Avatar.");
-						return;
+						creator.installToPrefab = GUILayout.Toggle(creator.installToPrefab, new GUIContent("Install Into Prefab (VRCFury / Modular Avatar)",
+							"Installs the system into a prefab instead of the avatar. The avatar's FX controller, parameters and menu are left untouched, " +
+							"and a standalone controller, parameters and menu are generated for the prefab's own merge component (e.g. a VRCFury Full Controller)."));
 					}
 
-					if (descriptor != null &&
-					    descriptor.baseAnimationLayers
-						    .FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController !=
-					    null &&
-					    ((AnimatorController)descriptor.baseAnimationLayers
-						    .FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController)
-					    .layers
-					    .Any(x => x.name.Contains("CustomObjectSync")))
+					if (creator.installToPrefab)
 					{
-						using (new HorizontalScope(GUI.skin.box))
+						creator.prefabRoot = (GameObject)ObjectField(new GUIContent("Prefab Root",
+							"The root of the prefab, e.g. the object with the VRCFury Full Controller. Generated animation paths are relative to this object."),
+							creator.prefabRoot, typeof(GameObject), true);
+
+						if (creator.prefabRoot == null)
 						{
-							GUILayout.FlexibleSpace();
-							using (new VerticalScope())
-							{
-								GUILayout.Label(
-									$"Custom Object Sync found on avatar. Multiple custom object syncs not supported.",
-									new[] { GUILayout.ExpandWidth(true) });
-								using (new HorizontalScope())
-								{
-									GUILayout.FlexibleSpace();
-									GUILayout.Label($"Please remove previous custom object sync before continuing.",
-										new[] { GUILayout.ExpandWidth(true) });
-									GUILayout.FlexibleSpace();
-								}
-
-								if (GUILayout.Button("Remove Custom Sync"))
-								{
-									creator.Remove();
-								}
-							}
-
-							GUILayout.FlexibleSpace();
+							GUILayout.Label("Please select the root of the prefab to install into.");
+							return;
 						}
 
-						return;
-					}
-
-					if (creator.ObjectPredicate(x => Equals(descriptor.gameObject, x)))
-					{
-						GUILayout.Label(
-							"Object has a VRC Avatar Descriptor. The object you select should be the object you want to sync, not the avatar.");
-						return;
-					}
-					
-					GUILayout.Space(2);
-					
-					creator.menuLocation = TextField(new GUIContent("Menu Location", "The menu path to the menu in which the enable toggle will be placed. e.g. /Props/Ball"), creator.menuLocation);
-
-					VRCExpressionsMenu menu = creator.GetMenuFromLocation(descriptor, creator.menuLocation);
-
-					if (creator.menuLocation != "" && creator.menuLocation != "/")
-					{
-						if (menu == null || menu.controls == null)
+						if (creator.prefabRoot.GetComponent<VRCAvatarDescriptor>() != null)
 						{
-							GUILayout.Label("Menu Location not found. Please select a valid menu location (e.g. /Props/Ball)");
+							GUILayout.Label("Prefab Root has a VRC Avatar Descriptor. Disable \"Install Into Prefab\" to install directly onto the avatar.");
+							return;
+						}
+
+						Transform installRoot = creator.prefabRoot.transform;
+
+						if (!creator.ObjectPredicate(x => x.transform != installRoot && x.transform.IsChildOf(installRoot), any: false))
+						{
+							GUILayout.Label("Object is not a child of the Prefab Root. Please select objects that are children of the Prefab Root.");
+							return;
+						}
+
+						if (creator.ObjectPredicate(x => PrefabUtility.IsPartOfPrefabInstance(x)))
+						{
+							GUILayout.Label("Object is part of a prefab instance and can't be moved. Please open the prefab in Prefab Mode, or unpack it, before continuing.");
+							return;
+						}
+
+						if (installRoot.Find("Custom Object Sync") != null)
+						{
+							DisplayAlreadyInstalledGUI("prefab");
 							return;
 						}
 					}
-
-					if (menu != null && (menu.controls.Count == 8 || (creator.addLocalDebugView && menu.controls.Count >= 7)))
+					else
 					{
-						GUILayout.Label("Menu Location is too full. Please select a menu location that has more space left or make some space in your selected menu location");
-						return;
+						VRCAvatarDescriptor descriptor = creator.syncObjects.FirstOrDefault(x => x != null)
+							?.GetComponentInParent<VRCAvatarDescriptor>();
+
+						if (!descriptor)
+						{
+							GUILayout.Label(
+								"Object is not a child of an Avatar. Please select an object that is a child of an Avatar, or enable \"Install Into Prefab\".");
+							return;
+						}
+
+						if (descriptor.baseAnimationLayers
+							    .FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController !=
+						    null &&
+						    ((AnimatorController)descriptor.baseAnimationLayers
+							    .FirstOrDefault(x => x.type == VRCAvatarDescriptor.AnimLayerType.FX).animatorController)
+						    .layers
+						    .Any(x => x.name.Contains("CustomObjectSync")))
+						{
+							DisplayAlreadyInstalledGUI("avatar");
+							return;
+						}
+
+						if (creator.ObjectPredicate(x => Equals(descriptor.gameObject, x)))
+						{
+							GUILayout.Label(
+								"Object has a VRC Avatar Descriptor. The object you select should be the object you want to sync, not the avatar.");
+							return;
+						}
+						
+						GUILayout.Space(2);
+						
+						creator.menuLocation = TextField(new GUIContent("Menu Location", "The menu path to the menu in which the enable toggle will be placed. e.g. /Props/Ball"), creator.menuLocation);
+
+						VRCExpressionsMenu menu = creator.GetMenuFromLocation(descriptor, creator.menuLocation);
+
+						if (creator.menuLocation != "" && creator.menuLocation != "/")
+						{
+							if (menu == null || menu.controls == null)
+							{
+								GUILayout.Label("Menu Location not found. Please select a valid menu location (e.g. /Props/Ball)");
+								return;
+							}
+						}
+
+						if (menu != null && (menu.controls.Count == 8 || (creator.addLocalDebugView && menu.controls.Count >= 7)))
+						{
+							GUILayout.Label("Menu Location is too full. Please select a menu location that has more space left or make some space in your selected menu location");
+							return;
+						}
 					}
-
-
 
 					GUILayout.Space(2);
 
@@ -205,6 +226,34 @@ namespace VRLabs.CustomObjectSyncCreator
 						EditorApplication.delayCall += creator.Generate;
 					}
 				}
+			}
+		}
+		
+		private void DisplayAlreadyInstalledGUI(string target)
+		{
+			using (new HorizontalScope(GUI.skin.box))
+			{
+				GUILayout.FlexibleSpace();
+				using (new VerticalScope())
+				{
+					GUILayout.Label(
+						$"Custom Object Sync found on {target}. Multiple custom object syncs not supported.",
+						new[] { GUILayout.ExpandWidth(true) });
+					using (new HorizontalScope())
+					{
+						GUILayout.FlexibleSpace();
+						GUILayout.Label($"Please remove previous custom object sync before continuing.",
+							new[] { GUILayout.ExpandWidth(true) });
+						GUILayout.FlexibleSpace();
+					}
+
+					if (GUILayout.Button("Remove Custom Sync"))
+					{
+						creator.Remove();
+					}
+				}
+
+				GUILayout.FlexibleSpace();
 			}
 		}
 		
@@ -353,7 +402,7 @@ namespace VRLabs.CustomObjectSyncCreator
 				}
 
 				creator.centeredOnAvatar = EditorGUILayout.Popup(new GUIContent("Sync Type", 
-						"Avatar Centered drops the sync point at the avatar's base when enabling sync. This means radius can be way lower, but it is not late join synced.\n" +
+						"Avatar Centered drops the sync point at the avatar's base (or the Prefab Root when installing into a prefab) when enabling sync. This means radius can be way lower, but it is not late join synced.\n" +
 						"World Centered syncs from world origin, which means larger radius is required, but it is late join synced."), (creator.centeredOnAvatar ? 1 : 0), 
 					new GUIContent[]
 					{

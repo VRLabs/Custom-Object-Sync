@@ -62,6 +62,19 @@ https://github.com/VRLabs/Custom-Object-Sync/assets/76777936/4d12a815-bb1f-4c03-
 > [!NOTE]  
 > When building for Quest, you will have to remove unsupported components and shaders
 
+### Installing into a prefab (VRCFury / Modular Avatar)
+
+By default, the system is installed onto the avatar: it's merged into the avatar's FX controller, expression parameters and menu. If the object you want to sync is part of a prefab that gets merged at build time (e.g. a VRCFury or Modular Avatar prefab), you can install it into the prefab instead:
+
+* Enable `Install Into Prefab (VRCFury / Modular Avatar)`.
+* Drag the root of the prefab into the `Prefab Root` field. The object(s) to sync must be children of it.
+  * If the prefab is an instance in your scene, open it in Prefab Mode (or unpack it) first.
+* Press Generate Custom Sync.
+
+The avatar is not modified. Instead, a standalone controller, expression parameters asset and menu are generated, with animation paths relative to the `Prefab Root`. Add them to the prefab's merge component, e.g. a VRCFury `Full Controller`, or a Modular Avatar `Merge Animator` (relative path mode) + `Parameters` + `Menu Installer`.
+
+When using `Avatar Centered`, the sync point is dropped at the `Prefab Root`, so keep the prefab root at the avatar's root.
+
 ## How to use
 
 * Enable the `CustomObjectSync/Enabled` bool to start the sync.
